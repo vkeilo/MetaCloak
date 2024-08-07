@@ -42,7 +42,7 @@ logger = get_logger(__name__)
 import torch
 import torch.nn.functional as F
 
-
+# 针对模型的unet和文本编码器进行的训练
 def train_few_step(
     args,
     models,
@@ -58,8 +58,10 @@ def train_few_step(
     # Load the tokenizer
 
     unet, text_encoder = copy.deepcopy(models[0]), copy.deepcopy(models[1])
+    # 绑定unet和文本编码器的参数，共同优化
     params_to_optimize = itertools.chain(unet.parameters(), text_encoder.parameters())
 
+    # 设置优化器，优化目标为unet参数和文本编码器参数
     optimizer = torch.optim.AdamW(
         params_to_optimize,
         lr=args.learning_rate,
@@ -70,6 +72,7 @@ def train_few_step(
 
     train_dataset = DreamBoothDatasetFromTensor(
         data_tensor,
+        # A photo of sks person
         args.instance_prompt,
         tokenizer,
         args.class_data_dir,
@@ -81,6 +84,7 @@ def train_few_step(
     weight_dtype = torch.bfloat16
     device = torch.device("cuda")
 
+    # 将关键模型移动到对应设备
     vae.to(device, dtype=weight_dtype)
     text_encoder.to(device, dtype=weight_dtype)
     unet.to(device, dtype=weight_dtype)
@@ -90,7 +94,7 @@ def train_few_step(
         
     pbar = tqdm(total=num_steps, desc="training")
     for step in range(num_steps):
-        
+        # 根据设置选择是否保存训练中间过程参数
         if step_wise_save and ((step+1) % save_step == 0 or step == 0):
             # make sure the model state dict is put to cpu
             step2modelstate[step] = {
@@ -101,36 +105,46 @@ def train_few_step(
             unet.to(device, dtype=weight_dtype); text_encoder.to(device, dtype=weight_dtype)
             
         pbar.update(1)
+        # 训练模式
         unet.train()
         text_encoder.train()
-
+        # 循环从训练数据集中取一个样本
         step_data = train_dataset[step % len(train_dataset)]
+        # 将样本中的类别图片和实例图片整合并移动到设备上
         pixel_values = torch.stack([step_data["instance_images"], step_data["class_images"]]).to(
             device, dtype=weight_dtype
         )
+        # 将样本中的类别提示词和实例提示词整合并移动到设备上
         input_ids = torch.cat([step_data["instance_prompt_ids"], step_data["class_prompt_ids"]], dim=0).to(device)
-
+        # 使用VAE对图像进行编码，并对潜在表示进行后处理
         latents = vae.encode(pixel_values).latent_dist.sample()
         latents = latents * vae.config.scaling_factor
 
         # Sample noise that we'll add to the latents
+        # 向图片编码向量（潜在空间向量表示）添加随机噪声
         noise = torch.randn_like(latents)
+        # batch_size
         bsz = latents.shape[0]
         # Sample a random timestep for each image
+        # 为每个图片生成一个随机step
         timesteps = torch.randint(0, noise_scheduler.config.num_train_timesteps, (bsz,), device=latents.device)
         timesteps = timesteps.long()
 
         # Add noise to the latents according to the noise magnitude at each timestep
         # (this is the forward diffusion process)
+        # 前向过程，得到前向扩散特定时间步后的图片的潜在空间向量
         noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
 
         # Get the text embedding for conditioning
+        # 文本编码向量作为条件信息
         encoder_hidden_states = text_encoder(input_ids)[0]
         
         # Predict the noise residual
+        # 模型基于当前的噪声潜在表示（noisy_latents）、时间步（timesteps）和文本条件（encoder_hidden_states），预测噪声残差
         model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
 
         # Get the target for loss depending on the prediction type
+        # 预测的可以是噪声，也可以是变化速度
         if noise_scheduler.config.prediction_type == "epsilon":
             target = noise
         elif noise_scheduler.config.prediction_type == "v_prediction":
@@ -139,28 +153,34 @@ def train_few_step(
             raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
 
         # with prior preservation loss
+        # 可选是否使用先验保留损失
         if args.with_prior_preservation:
+            # 再次分为一半一半，对应之前的stack操作
             model_pred, model_pred_prior = torch.chunk(model_pred, 2, dim=0)
             target, target_prior = torch.chunk(target, 2, dim=0)
 
             # Compute instance loss
             instance_loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
 
-            # Compute prior loss
+            # Compute prior loss  确保在原来类别上的生成能力不丢失
             prior_loss = F.mse_loss(model_pred_prior.float(), target_prior.float(), reduction="mean")
 
             # Add the prior loss to the instance loss.
             loss = instance_loss + args.prior_loss_weight * prior_loss
 
         else:
+            # 不使用先验保留损失
             loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
-
+        # 反向传播
         loss.backward(retain_graph=retain_graph)
+        # 梯度裁剪
         torch.nn.utils.clip_grad_norm_(params_to_optimize, 1.0, error_if_nonfinite=True)
+        # 参数优化
         optimizer.step()
         optimizer.zero_grad()
 
     pbar.close()
+    # 返回训练的参数数据
     if step_wise_save:
         return [unet, text_encoder], step2modelstate
     else:     
@@ -173,26 +193,29 @@ def load_model(args, model_path):
     text_encoder_cls = import_model_class_from_model_name_or_path(model_path, args.revision)
 
     # Load scheduler and models
+    # 文本编码器加载
     text_encoder = text_encoder_cls.from_pretrained(
         model_path,
         subfolder="text_encoder",
         revision=args.revision,
     )
+    # unet加载
     unet = UNet2DConditionModel.from_pretrained(model_path, subfolder="unet", revision=args.revision)
-
+    # tokenizer加载
     tokenizer = AutoTokenizer.from_pretrained(
         model_path,
         subfolder="tokenizer",
         revision=args.revision,
         use_fast=False,
     )
-
+    # 使用DDPM同款调度器
     noise_scheduler = DDPMScheduler.from_pretrained(model_path, subfolder="scheduler")
-
+    # 加载预训练的vae，vae不需要更新参数
     vae = AutoencoderKL.from_pretrained(model_path, subfolder="vae", revision=args.revision)
 
     vae.requires_grad_(False)
 
+    # 甚至可以不更新文本编码器的参数
     if not args.train_text_encoder:
         text_encoder.requires_grad_(False)
 
@@ -203,7 +226,7 @@ def load_model(args, model_path):
         print("pip install pip install xformers==0.0.17.dev461")
 
         unet.enable_xformers_memory_efficient_attention()
-
+    # 返回5个关键模型
     return text_encoder, unet, tokenizer, noise_scheduler, vae
 
 
