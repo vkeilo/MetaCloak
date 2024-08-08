@@ -186,7 +186,7 @@ def train_few_step(
     else:     
         return [unet, text_encoder]
 
-
+# 主要模型的加载
 def load_model(args, model_path):
     print(model_path)
     # import correct text encoder class
@@ -230,17 +230,16 @@ def load_model(args, model_path):
     return text_encoder, unet, tokenizer, noise_scheduler, vae
 
 
-
+# 解析参数
 def parse_args(): 
     
     parser = share_parse_args()
-    
+    # 是否在数据增强时使用水平翻转
     parser.add_argument(
         "--transform_hflip",
         action="store_true",
         help="Whether to use horizontal flip for transform.",
     )
-    
     
     parser.add_argument(
         "--instance_data_dir_for_train",
@@ -249,6 +248,7 @@ def parse_args():
         required=True,
         help="A folder containing the training data of instance images.",
     )
+
     parser.add_argument(
         "--instance_data_dir_for_adversarial",
         type=str,
@@ -256,128 +256,133 @@ def parse_args():
         required=True,
         help="A folder containing the images to add adversarial noise",
     )
-    
+    # 控制生成对抗样本时增加扰动的程度扰动是否递增
     parser.add_argument(
         "--defense_pgd_ascending",
         action="store_true",
         help="Whether to use ascending order for pgd.",
     )
     
+    # 防御 PGD 的半径（扰动的最大程度）
     parser.add_argument(
         "--defense_pgd_radius",
         type=float,
         default=8,
         help="The radius for defense pgd.",
     )
-    
+    # 防御 PGD 的步长（每一步的扰动大小）
     parser.add_argument(
         "--defense_pgd_step_size",
         type=float,
         default=2,
         help="The step size for defense pgd.",
     )
+    # 防御 PGD 的步数
     parser.add_argument(
         "--defense_pgd_step_num",
         type=int,
         default=8,
         help="The number of steps for defense pgd.",
     )
-    
+    # 是否在防御 PGD 中使用随机开始点
     parser.add_argument(
         "--defense_pgd_random_start",
         action="store_true",
         help="Whether to use random start for pgd.",
     )
-    
+    # 攻击 PGD 的半径（扰动的最大程度）
     parser.add_argument(
         "--attack_pgd_radius",
         type=float,
         default=4,
         help="The radius for attack pgd.",
     )
+    # 攻击 PGD 的步长（每一步的扰动大小）
     parser.add_argument(
         "--attack_pgd_step_size",
         type=int,
         default=2,
         help="The step size for attack pgd.",
     )
+    # 攻击 PGD 的步数
     parser.add_argument(
         "--attack_pgd_step_num",
         type=int,
         default=4,
         help="The number of steps for attack pgd.",
     )
+    # 是否在攻击 PGD 中使用递增顺序
     parser.add_argument(
         "--attack_pgd_ascending",
         action="store_true",
         help="Whether to use ascending order for pgd.",
     )
-    
+    # 是否在攻击 PGD 中使用随机开始点
     parser.add_argument(
         "--attack_pgd_random_start",
         action="store_true",
         help="Whether to use random start for pgd.",
     )
-    
+    # 目标图像路径
     parser.add_argument(
         "--target_image_path",
         default=None,
         help="target image for attacking",
     )
     
-    # args.gau_kernel_size
+    # 高斯滤波器的核大小（在数据增强中使用）
     parser.add_argument(
         "--gau_kernel_size",
         type=int,
         default=5,
         help="The kernel size for gaussian filter.",
     )
-    # defense_sample_num
+    # 用于防御的样本数量
     parser.add_argument(
         "--defense_sample_num",
         type=int,
         default=1,
         help="The number of samples for defense.",
     )
-    
+    # 旋转的角度
     parser.add_argument(
         "--rot_degree",
         type=int,
         default=5,
         help="The degree for rotation.",
     )
-    
+    # 是否在数据增强中使用旋转
     parser.add_argument(
         "--transform_rot", 
         action="store_true",
         help="Whether to use rotation for transform.",
         
     )
-    
+    # 是否在数据增强中使用高斯滤波
     parser.add_argument(
         "--transform_gau",
         action="store_true",
         help="Whether to use gaussian filter for transform.",
     )
-    
+    # 是否在对抗样本准备和标注中使用默认的原始流程
     parser.add_argument(
         "--original_flow", 
         action="store_true",
         help="Whether to use original flow in ASPL for transform.",
     )
-    
+    # 总实验次数
     parser.add_argument(
         "--total_trail_num",
         type=int,
         default=60,
     )
-    
+    # 记录间隔
     parser.add_argument(
         "--unroll_steps",
         type=int,
         default=2,
     )
-    
+    # 训练总步长
     parser.add_argument(
         "--interval",
         type=int,
@@ -394,22 +399,26 @@ def parse_args():
     args = parser.parse_args()
     return args
 
+# 核心处理流程
 def main(args):
+    # 指定日志目录
     logging_dir = Path(args.output_dir, args.logging_dir)
-
+    # Hugging Face加速器，指定混合精度训练模式和记录方式，默认为wandb
     accelerator = Accelerator(
         mixed_precision=args.mixed_precision,
         log_with=args.report_to,
         # logging_dir=logging_dir,
     )
 
-    
+    # 初始化日志记录器，指定格式和日志级别
     logging.basicConfig(
         format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
         datefmt="%m/%d/%Y %H:%M:%S",
         level=logging.INFO,
     )
+    # 记录加速器信息
     logger.info(accelerator.state, main_process_only=False)
+    # 只在主进程上尽可能详细地记录日志
     if accelerator.is_local_main_process:
         datasets.utils.logging.set_verbosity_warning()
         transformers.utils.logging.set_verbosity_warning()
@@ -418,17 +427,19 @@ def main(args):
         datasets.utils.logging.set_verbosity_error()
         transformers.utils.logging.set_verbosity_error()
         diffusers.utils.logging.set_verbosity_error()
-
+    # 设置随机种子
     if args.seed is not None:
         set_seed(args.seed)
 
     # Generate class images if prior preservation is enabled.
+    # 如果启用了先验保留，则先生成类图像，保存在变量cur_class_images中
     if args.with_prior_preservation:
+        # 检查并创建一个用于存储类别图像的目录，并统计当前目录中已经存在的类别图像数量
         class_images_dir = Path(args.class_data_dir)
         if not class_images_dir.exists():
             class_images_dir.mkdir(parents=True)
         cur_class_images = len(list(class_images_dir.iterdir()))
-
+        # 如果当前类别图像数量小于所需数量，则生成新的类别图像
         if cur_class_images < args.num_class_images:
             torch_dtype = torch.float16 if accelerator.device.type == "cuda" else torch.float32
             if args.mixed_precision == "fp32":
@@ -437,23 +448,28 @@ def main(args):
                 torch_dtype = torch.float16
             elif args.mixed_precision == "bf16":
                 torch_dtype = torch.bfloat16
+            # 此处的pipline是用来根据类别提示生成类别图像的模型
             pipeline = DiffusionPipeline.from_pretrained(
                 list(args.pretrained_model_name_or_path.split(","))[-1], 
                 torch_dtype=torch_dtype,
                 safety_checker=None,
                 revision=args.revision,
             )
+            # 生成类别图像时，不显示进度条
             pipeline.set_progress_bar_config(disable=True)
-
+            # 计算还需要生成的类别图像数量，num_class_images默认为200
             num_new_images = args.num_class_images - cur_class_images
             logger.info(f"Number of class images to sample: {num_new_images}.")
-
+            # 类别生成的提示词数据（其实都是 a photo of a person，因为在隐私保护中，扩散模型的的先验能力就是在人像类别上的生成能力）
             sample_dataset = PromptDataset(args.class_prompt, num_new_images)
+            # sample_batch_size默认为4
             sample_dataloader = torch.utils.data.DataLoader(sample_dataset, batch_size=args.sample_batch_size)
-
+            # 将数据集使用accelerator进行预处理（就是设置为使用混合精度和wandb记录）
             sample_dataloader = accelerator.prepare(sample_dataloader)
+            # 将模型移动到accelerator.device上（accelerator） 会自动选择
             pipeline.to(accelerator.device)
 
+            # 每批4个提示词，生成4个类别图像（一样的提示词）
             for example in tqdm(
                 sample_dataloader,
                 desc="Generating class images",
@@ -462,11 +478,12 @@ def main(args):
                 images = pipeline(example["prompt"]).images
 
                 for i, image in enumerate(images):
+                    # 使用哈希值为图像文件名，并保存
                     hash_image = hashlib.sha1(image.tobytes()).hexdigest()
                     image_filename = class_images_dir / f"{example['index'][i] + cur_class_images}-{hash_image}.jpg"
                     image.save(image_filename)
-
-            del pipeline
+            # 删除模型，释放显存
+            del pipelineß
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
                 
@@ -640,8 +657,10 @@ def main(args):
 
 
 if __name__ == "__main__":
+    # 获取脚本传参
     args = parse_args()
     wandb.init(project="metacloak", entity=args.wandb_entity_name)
     wandb.config.update(args)
     wandb.log({'status': 'gen'})
+    # 核心代码
     main(args)
