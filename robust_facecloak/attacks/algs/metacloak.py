@@ -486,31 +486,41 @@ def main(args):
             del pipelineß
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
-                
+    
+    # 判断是否启用tf32加速
     if args.allow_tf32:
         torch.backends.cuda.matmul.allow_tf32 = True
 
+    # 加载干净数据
     clean_data = load_data(
         args.instance_data_dir_for_train,
         # size=args.resolution,
         # center_crop=args.center_crop,
     )
     
+    # 加载原始扰动数据
     perturbed_data = load_data(
         args.instance_data_dir_for_adversarial,
         # size=args.resolution,
         # center_crop=args.center_crop,
     )
     
+    # original_data当前为原始扰动数据
     original_data= copy.deepcopy(perturbed_data)
         
     import torchvision
+    # 定义训练和测试时的数据增强（图像处理）
     train_aug = [
+            # 双线性插值到512x512
             transforms.Resize(args.resolution, interpolation=transforms.InterpolationMode.BILINEAR),
+            # 裁剪
             transforms.CenterCrop(args.resolution) if args.center_crop else transforms.RandomCrop(args.resolution),
     ]
+    # 图像随机旋转
     rotater = torchvision.transforms.RandomRotation(degrees=(0, args.rot_degree))
+    # 高斯模糊
     gau_filter = transforms.GaussianBlur(kernel_size=args.gau_kernel_size,)
+    # 制定防御对抗样本变换策略
     defense_transform = [
     ]
     if args.transform_hflip:
@@ -520,16 +530,19 @@ def main(args):
     if args.transform_gau:
         defense_transform = [gau_filter] + defense_transform
     
+    # 标准化均值和标准差
     tensorize_and_normalize = [
         transforms.Normalize([0.5*255]*3,[0.5*255]*3),
     ]
     
+    # 将所有变换组合起来，整合为一个Compose对象
     all_trans = train_aug + defense_transform + tensorize_and_normalize
     all_trans = transforms.Compose(all_trans)
     
     
     from robust_facecloak.attacks.worker.robust_pgd_worker import RobustPGDAttacker
     from robust_facecloak.attacks.worker.pgd_worker import PGDAttacker
+    # 构建攻击者和防御者，攻击者使用PGD算法
     attacker = PGDAttacker(
         radius=args.attack_pgd_radius, 
         steps=args.attack_pgd_step_num, 
@@ -551,10 +564,14 @@ def main(args):
         sample_num=args.defense_sample_num,
         x_range=[0, 255],
     )
+
+    # 模型加载，本次实验只有一个
     model_paths = list(args.pretrained_model_name_or_path.split(","))
     num_models = len(model_paths)
 
     MODEL_BANKS = [load_model(args, path) for path in model_paths]
+
+    # 提取模型的文本编码器和UNet的状态字典
     MODEL_STATEDICTS = [
         {
             "text_encoder": MODEL_BANKS[i][0].state_dict(),
@@ -562,7 +579,7 @@ def main(args):
         }
         for i in range(num_models)
     ]
-    
+    # 此函数将保存经过扰动处理的图像数据到noise-ckpt/{id_stamp}目录中，id_stamp在此次实验中为迭代次数
     def save_image(perturbed_data, id_stamp):
         save_folder = f"{args.output_dir}/noise-ckpt/{id_stamp}"
         os.makedirs(save_folder, exist_ok=True)
@@ -581,13 +598,18 @@ def main(args):
     init_model_state_pool = {}
     pbar = tqdm(total=num_models, desc="initializing models")
     # split sub-models
+    # 对于每一个模型，都进行一次训练
     for j in range(num_models):
         init_model_state_pool[j] = {}
+        # 提取关键模块
         text_encoder, unet, tokenizer, noise_scheduler, vae = MODEL_BANKS[j]
         
+        # 加载unet和text_encoder的模型参数
         unet.load_state_dict(MODEL_STATEDICTS[j]["unet"])
         text_encoder.load_state_dict(MODEL_STATEDICTS[j]["text_encoder"])
+        # 打包unet和text_encoder
         f_ori = [unet, text_encoder]
+        # 得到训练total_train_steps步之后的unet, text_encoder参数以及中间状态参数
         f_ori, step2state_dict = train_few_step(
                 args,
                 f_ori,
@@ -599,7 +621,10 @@ def main(args):
                 step_wise_save=True,
                 save_step=args.interval,
         )  
+        # init_model_state_pool就来保存训练中间状态参数
         init_model_state_pool[j] = step2state_dict
+
+        # 释放占用的资源
         del f_ori, unet, text_encoder, tokenizer, noise_scheduler, vae
         import gc
         gc.collect()
@@ -607,24 +632,32 @@ def main(args):
         pbar.update(1)
     pbar.close()
     
-            
+    # 提取保存的中间状态的step数据（1000，2000，3000.....）        
     steps_list = list(init_model_state_pool[0].keys())
+    # 进度条，总train_few_step调用的次数
     pbar = tqdm(total=args.total_trail_num * num_models * (args.interval // args.advance_steps) * len(steps_list), desc="meta poison with model ensemble")
     cnt=0
     # learning perturbation over the ensemble of models
+    # 在多个模型集合上进行扰动
+    # 多次实验
     for _ in range(args.total_trail_num):
+        # 针对每一个模型
         for model_i in range(num_models):
+            # 确定关键组件
             text_encoder, unet, tokenizer, noise_scheduler, vae = MODEL_BANKS[model_i]
+            # 对于每一个中间状态step
             for split_step in steps_list: 
+                # 加载unet和文本编码器的中间状态参数
                 unet.load_state_dict(init_model_state_pool[model_i][split_step]["unet"])
                 text_encoder.load_state_dict(init_model_state_pool[model_i][split_step]["text_encoder"])
                 f = [unet, text_encoder]
-                
+                # 每advance_steps步进行一次防御优化
                 for j in range(args.interval // args.advance_steps):
-                    
+                    # 更新一次扰动，使得扰动更加强大
                     perturbed_data = defender.perturb(f, perturbed_data, original_data, vae, tokenizer, noise_scheduler,)
+                    # 扰动优化次数更新 +1
                     cnt+=1
-                    
+                    # 在新的扰动数据下，训练advance_steps步
                     f = train_few_step(
                         args,
                         f,
@@ -635,11 +668,13 @@ def main(args):
                         args.advance_steps,
                     )
                     pbar.update(1)
+                    # 每1000次扰动优化，保存一次扰动示例图像
                     if cnt % 1000 == 0:
                         save_image(perturbed_data, f"{cnt}")
                 
                 # frequently release the memory due to limited GPU memory, 
                 # env with more gpu might consider to remove the following lines for boosting speed
+                # 释放资源
                 del f 
                 torch.cuda.empty_cache()
                 
@@ -652,7 +687,7 @@ def main(args):
         gc.collect()
         torch.cuda.empty_cache()      
     pbar.close()
-
+    # 保存最后的结果
     save_image(perturbed_data, "final")
 
 

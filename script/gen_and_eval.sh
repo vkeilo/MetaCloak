@@ -7,6 +7,7 @@ export wandb_entity_name=momo
 export seed=0
 # for other models, change the name and path correspondingly
 # SD21, SD21base, SD15, SD14
+# 确定一些基本路径
 export gen_model_name=SD21base # the model to generate the noise 
 export MODEL_ROOT=$ADB_PROJECT_ROOT
 export gen_model_path=$MODEL_ROOT/SD/stable-diffusion-2-1-base
@@ -44,6 +45,7 @@ export prefix_name_train=$prefix_name_train
 export method_hyper_name=$method_name-$method_hyper
 export gen_exp_name=$gen_exp_name_prefix-$method_hyper_name
 export gen_exp_hyper=dataset-$dataset_name-r-$r-model-$gen_model_name-gen_prompt-$gen_prompt
+#     /data/home/yekai/tmp/MetaCloak/exp_data/gen_output/release-MetaCloak-advance_steps-2-total_trail_num-4-unroll_steps-1-interval-200-total_train_steps-1000-SD21base-robust-gauK-7/dataset-VGGFace2-clean-r-11-model-SD21base-gen_prompt-sks/0
 export OUTPUT_DIR="$ADB_PROJECT_ROOT/exp_data/gen_output/${gen_exp_name}/$gen_exp_hyper/${instance_name}"
 export INSTANCE_DIR=$OUTPUT_DIR/noise-ckpt/${round}
 export CLEAN_INSTANCE_DIR=$OUTPUT_DIR/image_before_addding_noise/
