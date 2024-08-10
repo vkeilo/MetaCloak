@@ -638,7 +638,7 @@ def main(args):
     pbar = tqdm(total=args.total_trail_num * num_models * (args.interval // args.advance_steps) * len(steps_list), desc="meta poison with model ensemble")
     cnt=0
     # learning perturbation over the ensemble of models
-    # 在多个模型集合上进行扰动
+    # 在多个模型集合上进行扰动优化
     # 多次实验
     for _ in range(args.total_trail_num):
         # 针对每一个模型
@@ -653,11 +653,41 @@ def main(args):
                 f = [unet, text_encoder]
                 # 每advance_steps步进行一次防御优化
                 for j in range(args.interval // args.advance_steps):
-                    # 更新一次扰动，使得扰动更加强大
+                    # 更新一次扰动，使得扰动更加强大,后续需要在此处引入随机性（多轮采样优化），并以扰动的平均值作为后续的扰动
+                    # vkeilo add it
+                    # mean_delta = perturbed_data
+                    # for in range(args.sampling_times_theta):
+                    #     perturbed_data = defender.perturb(f, perturbed_data, original_data, vae, tokenizer, noise_scheduler,)
+                    #     perturbed_data = utils.SGLD(delta, args.sampling_step_delta, delta_noise_epsion).detach()
+                    #     mean_delta = args.beta_s * mean_delta + (1 - args.beta_s) * perturbed_data
+                    # perturbed_data = mean_delta
+                    # mean_data.detach()
                     perturbed_data = defender.perturb(f, perturbed_data, original_data, vae, tokenizer, noise_scheduler,)
                     # 扰动优化次数更新 +1
                     cnt+=1
-                    # 在新的扰动数据下，训练advance_steps步
+                    # 在新的扰动数据下，训练advance_steps步，后续需要在此处引入随机性（多轮采样优化参数），并以参数的平均值作为模型的参数
+                    # vkeilo add it
+                    # back_parameters = [f[0].state_dict(), f[1].state_dict()]
+                    # mean_theta = [f[0].state_dict(), f[1].state_dict()]
+                    # for k in range(args.sampling_times_theta):
+                    #     f = train_few_step(
+                    #         args,
+                    #         f,
+                    #         tokenizer,
+                    #         noise_scheduler,
+                    #         vae,
+                    #         perturbed_data.float(),
+                    #         args.advance_steps,
+                    #     )
+                    #     for model in f:
+                    #         for name, p in model.named_parameters():
+                    #             lr_now = lr_scheduler.get_last_lr()[0]
+                    #             # 参数采样
+                    #             p.data = utils.SGLD(p.data, lr_now, theta_noise_epsion)
+                    #             # 模型参数也使用指数平均
+                    #             mean_theta[name] = args.beta_s * mean_theta[name] + (1 - args.beta_s) * p.data
+                    # lr_scheduler.step()
+
                     f = train_few_step(
                         args,
                         f,
