@@ -394,7 +394,23 @@ def parse_args():
         type=int,
         default=1000, 
     )
-    
+
+    # vkeilo add it 
+    # 采样次数
+    parser.add_argument(
+        "--sampling_times_theta",
+        type=int,
+        default=10,
+    )
+
+    # vkeilo add it
+    # 滑动平均参数
+    parser.add_argument(
+        "--beta_s",
+        type=float,
+        default=0.3,
+    )
+
     
     args = parser.parse_args()
     return args
@@ -656,7 +672,7 @@ def main(args):
                     # 更新一次扰动，使得扰动更加强大,后续需要在此处引入随机性（多轮采样优化），并以扰动的平均值作为后续的扰动
                     # vkeilo add it
                     # mean_delta = perturbed_data
-                    # for in range(args.sampling_times_theta):
+                    # for k in range(args.sampling_times_theta):
                     #     perturbed_data = defender.perturb(f, perturbed_data, original_data, vae, tokenizer, noise_scheduler,)
                     #     perturbed_data = utils.SGLD(delta, args.sampling_step_delta, delta_noise_epsion).detach()
                     #     mean_delta = args.beta_s * mean_delta + (1 - args.beta_s) * perturbed_data
@@ -667,8 +683,8 @@ def main(args):
                     cnt+=1
                     # 在新的扰动数据下，训练advance_steps步，后续需要在此处引入随机性（多轮采样优化参数），并以参数的平均值作为模型的参数
                     # vkeilo add it
-                    # back_parameters = [f[0].state_dict(), f[1].state_dict()]
-                    # mean_theta = [f[0].state_dict(), f[1].state_dict()]
+                    # back_parameters_list = [f[0].state_dict(), f[1].state_dict()]
+                    # mean_theta_list = [f[0].state_dict(), f[1].state_dict()]
                     # for k in range(args.sampling_times_theta):
                     #     f = train_few_step(
                     #         args,
@@ -682,12 +698,18 @@ def main(args):
                     #     for model in f:
                     #         for name, p in model.named_parameters():
                     #             lr_now = lr_scheduler.get_last_lr()[0]
-                    #             # 参数采样
+                    #             # 参数采样,引入随机性
                     #             p.data = utils.SGLD(p.data, lr_now, theta_noise_epsion)
                     #             # 模型参数也使用指数平均
                     #             mean_theta[name] = args.beta_s * mean_theta[name] + (1 - args.beta_s) * p.data
                     # lr_scheduler.step()
-
+                    # # 对于模型的unet和文本编码器，分别更新参数
+                    # for back_parameters, mean_theta in zip(back_parameters_list,mean_theta_list):
+                    #     for name in back_parameters:
+                    #         back_parameters[name] = args.beta_p * back_parameters[name] + (1 - args.beta_p) * mean_theta[name]
+                    # for index, model in enumerate(f):
+                    #     model.load_state_dict(back_parameters_list[index])
+                    
                     f = train_few_step(
                         args,
                         f,
