@@ -37,7 +37,7 @@ export model_name=$gen_model_name
 # go to main directory
 pwdd=$(cd "$(dirname "$0")";pwd)
 cd $pwdd 
-. ./methods_config.sh
+. ./methods_config_vk.sh
 export step_size=$(echo "scale=2; $r/10" | bc); 
 export gen_exp_name_prefix=$prefix_name_gen
 export prefix_name_train=$prefix_name_train
