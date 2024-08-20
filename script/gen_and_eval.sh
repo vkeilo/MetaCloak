@@ -50,7 +50,7 @@ export CLEAN_INSTANCE_DIR=$OUTPUT_DIR/image_before_addding_noise/
 export INSTANCE_DIR_CHECK=$INSTANCE_DIR
 
 
-# generate the noise 
+# generate the noise (metacloak.sh)
 bash ./sub/gen/$gen_file_name
 
 # evaluate the noise with dreambooth training

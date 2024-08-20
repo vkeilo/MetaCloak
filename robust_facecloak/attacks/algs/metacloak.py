@@ -557,7 +557,7 @@ def main(args):
     
     
     from robust_facecloak.attacks.worker.robust_pgd_worker import RobustPGDAttacker
-    from robust_facecloak.attacks.worker.pgd_worker import PGDAttacker
+    from MetaCloak.robust_facecloak.attacks.worker.pgd_worker_vk import PGDAttacker
     # 构建攻击者和防御者，攻击者使用PGD算法
     attacker = PGDAttacker(
         radius=args.attack_pgd_radius, 

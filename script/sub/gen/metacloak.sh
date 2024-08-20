@@ -52,7 +52,7 @@ if [ ! -d "$INSTANCE_DIR_CHECK" ]; then
     --attack_pgd_step_size=1 \
     --attack_pgd_step_num=3 \
     --mixed_precision=fp16"""
-    
+    # 或者使用数据增强的数据
     if [ "$train_mode" = "gau" ]; then
       command="$command --transform_gau --gau_kernel_size $gauK --transform_hflip "
     fi

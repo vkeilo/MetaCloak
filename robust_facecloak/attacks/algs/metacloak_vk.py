@@ -154,33 +154,61 @@ def train_few_step(
         else:
             raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
 
-        # with prior preservation loss
-        # 可选是否使用先验保留损失
-        if args.with_prior_preservation:
-            # 再次分为一半一半，对应之前的stack操作
-            model_pred, model_pred_prior = torch.chunk(model_pred, 2, dim=0)
-            target, target_prior = torch.chunk(target, 2, dim=0)
+        # vkeilo add it
+        theta_noise_epsion = args.sampling_step_theta * args.sampling_noise_ratio
+        back_parameters_unet = unet.state_dict()
+        mean_theta_unet = unet.state_dict()
+        back_parameters_textencoder = text_encoder.state_dict()
+        mean_theta_textencoder = text_encoder.state_dict()
+        for _sample in range(args.sampling_times_theta):
+            # with prior preservation loss
+            # 可选是否使用先验保留损失
+            optimizer.zero_grad()
 
-            # Compute instance loss
-            instance_loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+            if args.with_prior_preservation:
+                # 再次分为一半一半，对应之前的stack操作
+                model_pred, model_pred_prior = torch.chunk(model_pred, 2, dim=0)
+                target, target_prior = torch.chunk(target, 2, dim=0)
 
-            # Compute prior loss  确保在原来类别上的生成能力不丢失
-            prior_loss = F.mse_loss(model_pred_prior.float(), target_prior.float(), reduction="mean")
+                # Compute instance loss
+                instance_loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
 
-            # Add the prior loss to the instance loss.
-            loss = instance_loss + args.prior_loss_weight * prior_loss
+                # Compute prior loss  确保在原来类别上的生成能力不丢失
+                prior_loss = F.mse_loss(model_pred_prior.float(), target_prior.float(), reduction="mean")
 
-        else:
-            # 不使用先验保留损失
-            loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
-        # 反向传播
-        loss.backward(retain_graph=retain_graph)
-        # 梯度裁剪
-        torch.nn.utils.clip_grad_norm_(params_to_optimize, 1.0, error_if_nonfinite=True)
-        # 参数优化
-        optimizer.step()
-        optimizer.zero_grad()
+                # Add the prior loss to the instance loss.
+                loss = instance_loss + args.prior_loss_weight * prior_loss
 
+            else:
+                # 不使用先验保留损失
+                loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+            # 反向传播
+            loss.backward(retain_graph=retain_graph)
+            # 梯度裁剪
+            torch.nn.utils.clip_grad_norm_(params_to_optimize, 1.0, error_if_nonfinite=True)
+            # 参数优化
+            optimizer.step()
+            # optimizer.zero_grad()
+            for name, p in unet.named_parameters():
+                # lr_now = lr_scheduler.get_last_lr()[0]
+                lr_now = 1e-4
+                # 参数采样
+                p.data = utils.SGLD(p.data, lr_now, args.theta_noise_epsion)
+                # 模型参数也使用指数平均
+                mean_theta_unet[name] = args.beta_s * mean_theta_unet[name] + (1 - args.beta_s) * p.data
+            for name, p in text_encoder.named_parameters():
+                # lr_now = lr_scheduler.get_last_lr()[0]
+                lr_now = 1e-4
+                # 参数采样
+                p.data = utils.SGLD(p.data, lr_now, args.theta_noise_epsion)
+                # 模型参数也使用指数平均
+                mean_theta_textencoder[name] = args.beta_s * mean_theta_textencoder[name] + (1 - args.beta_s) * p.data
+        for name in back_parameters_unet:
+            back_parameters_unet[name] = args.beta_p * back_parameters_unet[name] + (1 - args.beta_p) * mean_theta_unet[name]
+        for name in back_parameters_textencoder:
+            back_parameters_textencoder[name] = args.beta_p * back_parameters_textencoder[name] + (1 - args.beta_p) * mean_theta_textencoder[name]
+        unet.load_state_dict(back_parameters_unet)
+        text_encoder.load_state_dict(back_parameters_textencoder)
     pbar.close()
     # 返回训练的参数数据
     if step_wise_save:
@@ -599,7 +627,7 @@ def main(args):
     
     
     from robust_facecloak.attacks.worker.robust_pgd_worker import RobustPGDAttacker
-    from robust_facecloak.attacks.worker.pgd_worker import PGDAttacker
+    from MetaCloak.robust_facecloak.attacks.worker.pgd_worker_vk import PGDAttacker
     # 构建攻击者和防御者，攻击者使用PGD算法
     attacker = PGDAttacker(
         radius=args.attack_pgd_radius, 
@@ -696,13 +724,14 @@ def main(args):
     pbar = tqdm(total=args.total_trail_num * num_models * (args.interval // args.advance_steps) * len(steps_list), desc="meta poison with model ensemble")
     cnt=0
     # vkeilo add it  确定噪声强度
-    theta_noise_epsion = args.sampling_step_theta * args.sampling_noise_ratio
-    delta_noise_epsion = args.sampling_step_delta * args.sampling_noise_ratio
+    # theta_noise_epsion = args.sampling_step_theta * args.sampling_noise_ratio
+    # delta_noise_epsion = args.sampling_step_delta * args.sampling_noise_ratio
 
 
     # learning perturbation over the ensemble of models
     # 在多个模型集合上进行扰动优化
     # 多次实验
+    total_iterations = args.epochs * len(train_dataloader)
     for _ in range(args.total_trail_num):
         # 针对每一个模型
         for model_i in range(num_models):
@@ -718,56 +747,56 @@ def main(args):
                 for j in range(args.interval // args.advance_steps):
                     # 更新一次扰动，使得扰动更加强大,后续需要在此处引入随机性（多轮采样优化），并以扰动的平均值作为后续的扰动
                     # vkeilo add it
-                    mean_delta = perturbed_data
-                    for k in range(args.sampling_times_theta):
-                        perturbed_data = defender.perturb(f, perturbed_data, original_data, vae, tokenizer, noise_scheduler,)
-                        # 此处引入随机梯度朗之万动力学
-                        perturbed_data = utils.SGLD(perturbed_data, args.sampling_step_delta, delta_noise_epsion).detach()
-                        mean_delta = args.beta_s * mean_delta + (1 - args.beta_s) * perturbed_data
-                    perturbed_data = mean_delta
-                    mean_delta.detach()
-                    # perturbed_data = defender.perturb(f, perturbed_data, original_data, vae, tokenizer, noise_scheduler,)
+                    # mean_delta = perturbed_data
+                    # for k in range(args.sampling_times_theta):
+                    #     perturbed_data = defender.perturb(f, perturbed_data, original_data, vae, tokenizer, noise_scheduler,)
+                    #     # 此处引入随机梯度朗之万动力学
+                    #     perturbed_data = utils.SGLD(perturbed_data, args.sampling_step_delta, delta_noise_epsion).detach()
+                    #     mean_delta = args.beta_s * mean_delta + (1 - args.beta_s) * perturbed_data
+                    # perturbed_data = mean_delta
+                    # mean_delta.detach()
+                    perturbed_data = defender.perturb(f, perturbed_data, original_data, vae, tokenizer, noise_scheduler,)
                     # 扰动优化次数更新 +1
                     cnt+=1
                     # 在新的扰动数据下，训练advance_steps步，后续需要在此处引入随机性（多轮采样优化参数），并以参数的平均值作为模型的参数
                     # vkeilo add it
-                    back_parameters_list = [f[0].state_dict(), f[1].state_dict()]
-                    mean_theta_list = [f[0].state_dict(), f[1].state_dict()]
-                    for k in range(args.sampling_times_theta):
-                        f = train_few_step(
-                            args,
-                            f,
-                            tokenizer,
-                            noise_scheduler,
-                            vae,
-                            perturbed_data.float(),
-                            args.advance_steps,
-                        )
-                        for model in f:
-                            for name, p in model.named_parameters():
-                                # 先尝试固定学习率的（因为迭代次数暂未确定）
-                                # lr_now = lr_scheduler.get_last_lr()[0]
-                                # 参数采样,引入随机性
-                                p.data = utils.SGLD(p.data, args.sampling_step_delta, theta_noise_epsion)
-                                # 模型参数也使用指数平均
-                                mean_theta[name] = args.beta_s * mean_theta[name] + (1 - args.beta_s) * p.data
-                    # lr_scheduler.step()
-                    # 对于模型的unet和文本编码器，分别更新参数
-                    for back_parameters, mean_theta in zip(back_parameters_list,mean_theta_list):
-                        for name in back_parameters:
-                            back_parameters[name] = args.beta_p * back_parameters[name] + (1 - args.beta_p) * mean_theta[name]
-                    for index, model in enumerate(f):
-                        model.load_state_dict(back_parameters_list[index])
+                    # back_parameters_list = [f[0].state_dict(), f[1].state_dict()]
+                    # mean_theta_list = [f[0].state_dict(), f[1].state_dict()]
+                    # for k in range(args.sampling_times_theta):
+                    #     f = train_few_step(
+                    #         args,
+                    #         f,
+                    #         tokenizer,
+                    #         noise_scheduler,
+                    #         vae,
+                    #         perturbed_data.float(),
+                    #         args.advance_steps,
+                    #     )
+                    #     for model in f:
+                    #         for name, p in model.named_parameters():
+                    #             # 先尝试固定学习率的（因为迭代次数暂未确定）
+                    #             # lr_now = lr_scheduler.get_last_lr()[0]
+                    #             # 参数采样,引入随机性
+                    #             p.data = utils.SGLD(p.data, args.sampling_step_delta, theta_noise_epsion)
+                    #             # 模型参数也使用指数平均
+                    #             mean_theta[name] = args.beta_s * mean_theta[name] + (1 - args.beta_s) * p.data
+                    # # lr_scheduler.step()
+                    # # 对于模型的unet和文本编码器，分别更新参数
+                    # for back_parameters, mean_theta in zip(back_parameters_list,mean_theta_list):
+                    #     for name in back_parameters:
+                    #         back_parameters[name] = args.beta_p * back_parameters[name] + (1 - args.beta_p) * mean_theta[name]
+                    # for index, model in enumerate(f):
+                    #     model.load_state_dict(back_parameters_list[index])
                     
-                    # f = train_few_step(
-                    #     args,
-                    #     f,
-                    #     tokenizer,
-                    #     noise_scheduler,
-                    #     vae,
-                    #     perturbed_data.float(),
-                    #     args.advance_steps,
-                    # )
+                    f = train_few_step(
+                        args,
+                        f,
+                        tokenizer,
+                        noise_scheduler,
+                        vae,
+                        perturbed_data.float(),
+                        args.advance_steps,
+                    )
                     pbar.update(1)
                     # 每1000次扰动优化，保存一次扰动示例图像
                     if cnt % 1000 == 0:

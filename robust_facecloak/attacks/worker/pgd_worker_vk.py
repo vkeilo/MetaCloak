@@ -1,5 +1,7 @@
 import torch
 import torch.nn.functional as F
+# vkeilo add it
+import utils
 
 class PGDAttacker():
     def __init__(self, radius, steps, step_size, random_start, norm_type='l-infty', ascending=True, args=None, x_range=[-1, 1]):
@@ -99,6 +101,10 @@ class PGDAttacker():
             max_length=tokenizer.model_max_length,
             return_tensors="pt",
         ).input_ids.repeat(len(x), 1)
+        # vkeilo add it
+        delta_noise_epsion = self.args.sampling_step_delta *self.args.sampling_noise_ratio
+        mean_adv_x = adv_x.clone().detach()
+
         for step in range(self.steps):
             adv_x.requires_grad_()
             loss = self.certi(models, adv_x,vae, noise_scheduler, input_ids, device, weight_dtype, target_tensor)
@@ -113,10 +119,14 @@ class PGDAttacker():
                     raise NotImplementedError
             self._clip_(adv_x, ori_x)
 
+            # vkeilo add it
+            adv_x = utils.SGLD(adv_x, self.args.sampling_step_delta, delta_noise_epsion).detach()
+            mean_adv_x = self.args.beta_s * mean_adv_x + (1 - self.args.beta_s) * adv_x
 
             
         with torch.no_grad():
-            noise_added = adv_x.detach_() - x
+            # vkeilo change adv_x.detach_() to mean_adv_x
+            noise_added = mean_adv_x - x
             noise_added.clamp_(-self.radius, self.radius)
             new_x = x + noise_added
             new_x = new_x.clamp(self.left, self.right)

@@ -227,6 +227,7 @@ class RobustPGDAttacker():
         
         x.requires_grad_(True)
         # 多次采样
+        # mean_delta = adv_x
         for _step in range(self.steps):
             x.requires_grad = True
             for _sample in range(self.sample_num):
@@ -242,12 +243,16 @@ class RobustPGDAttacker():
 
             with torch.no_grad():
                 grad = x.grad.data
-                
+                # vkeilo add it
+                # 引入SGLD
+                noise_sgld = torch.randn_like(grad) * torch.sqrt(torch.tensor(self.sampling_step_delta))
+
                 if not self.ascending: 
                     grad.mul_(-1)
                     
                 if self.norm_type == 'l-infty':
-                    x.add_(torch.sign(grad), alpha=self.step_size)
+                    # vkeilo change it x.add_(torch.sign(grad), alpha=self.step_size)
+                    x.add_(torch.sign(grad) + noise_sgld, alpha=self.step_size)
                 else:
                     raise NotImplementedError
                 x = self._clip_(x, ori_x, ).detach_()

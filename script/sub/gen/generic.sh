@@ -17,6 +17,7 @@ fi
 echo $class_name
 # replace blank in class_name with -
 class_name=$(echo $class_name | sed "s/ /-/g")
+# 先保留先验数据
 export CLASS_DIR="$ADB_PROJECT_ROOT/prior-data/$model_name/class-$class_name"
 
 export OUTPUT_DIR="$ADB_PROJECT_ROOT/exp_data/gen_output/$gen_exp_name/$gen_exp_hyper/${instance_name}"
@@ -24,4 +25,3 @@ mkdir -p $OUTPUT_DIR
 cp -r $CLEAN_REF $OUTPUT_DIR/image_clean_ref
 cp -r $CLEAN_ADV_DIR $OUTPUT_DIR/image_before_addding_noise
 export step_size=$(echo "scale=2; $r/10" | bc)
-

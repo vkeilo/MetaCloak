@@ -49,6 +49,8 @@ export INSTANCE_DIR=$OUTPUT_DIR/noise-ckpt/${round}
 export CLEAN_INSTANCE_DIR=$OUTPUT_DIR/image_before_addding_noise/
 export INSTANCE_DIR_CHECK=$INSTANCE_DIR
 
+# vkeilo add it
+export PYTHONPATH=$ADB_PROJECT_ROOT:$PYTHONPATH
 
 # generate the noise 
 bash ./sub/gen/$gen_file_name

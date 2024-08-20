@@ -7,7 +7,8 @@ if [ "$method_select" = "metacloak" ]; then
     export interval=200; 
     export total_train_steps=1000; 
     export unroll_steps=1;
-    export defense_sample_num=1;
+    # vkeilo change it from default 1 to 10
+    export defense_sample_num=10;
     export ref_model_path=$gen_model_path
     export method_hyper=advance_steps-$advance_steps-total_trail_num-$total_trail_num-unroll_steps-$unroll_steps-interval-$interval-total_train_steps-$total_train_steps-$model_name
     
