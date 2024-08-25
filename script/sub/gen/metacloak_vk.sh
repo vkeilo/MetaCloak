@@ -1,7 +1,7 @@
-source activate $ADB_ENV_NAME;
+# source activate $ADB_ENV_NAME;
 dir_of_this_file="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 source $dir_of_this_file/generic.sh
-
+which python
 ###### the following are method-related variables ######
 alg_file_name="metacloak_vk"
 round=final
@@ -52,7 +52,7 @@ if [ ! -d "$INSTANCE_DIR_CHECK" ]; then
     --attack_pgd_step_size=1 \
     --attack_pgd_step_num=3 \
     --mixed_precision=fp16 \
-    --sampling_times_theta=10 \
+    --sampling_times_theta=$sampling_times_theta \
     --beta_s=0.3 \
     --beta_p=0.3"""
     

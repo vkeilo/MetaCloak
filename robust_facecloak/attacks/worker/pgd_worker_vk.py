@@ -104,7 +104,7 @@ class PGDAttacker():
         # vkeilo add it
         delta_noise_epsion = self.args.sampling_step_delta *self.args.sampling_noise_ratio
         mean_adv_x = adv_x.clone().detach()
-
+        print(f'start sample noise {self.steps} steps')
         for step in range(self.steps):
             adv_x.requires_grad_()
             loss = self.certi(models, adv_x,vae, noise_scheduler, input_ids, device, weight_dtype, target_tensor)

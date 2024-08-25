@@ -1,7 +1,7 @@
-source activate $ADB_ENV_NAME;
+# source activate $ADB_ENV_NAME;
 dir_of_this_file="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 source $dir_of_this_file/generic.sh
-
+which python
 ###### the following are method-related variables ######
 alg_file_name="metacloak"
 round=final

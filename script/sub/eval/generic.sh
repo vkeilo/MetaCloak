@@ -1,12 +1,11 @@
 
 export max_train_steps=1000
 export lr=5e-7
-
 echo set up the model path
 export MODEL_PATH=$eval_model_path
 echo $MODEL_PATH
 
-export WANDB_MODE=disabled
+export WANDB_MODE=online
 export CLEAN_REF="$ADB_PROJECT_ROOT/dataset/$dataset_name/${instance_name}/set_C"
 class_name=$(cat $ADB_PROJECT_ROOT/dataset/$dataset_name/${instance_name}/class.txt)
 # map class_name from face to person
@@ -27,6 +26,7 @@ export TEXTUAL_INVERSION_OUTPUT_DIR="$ADB_PROJECT_ROOT/exp_data/train_output/$tr
 cd $ADB_PROJECT_ROOT/robust_facecloak
 instance_prompt="a photo of $eval_prompt $class_name"
 source activate $ADB_ENV_NAME;
+conda activate Metacloak
 
 # this is to indicate that whether we have finished the training before 
 training_finish_indicator=$DREAMBOOTH_OUTPUT_DIR/finished.txt

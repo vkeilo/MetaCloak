@@ -44,6 +44,10 @@ logger = get_logger(__name__)
 import torch
 import torch.nn.functional as F
 
+# vkeilo add
+device_g = torch.device("cuda")
+
+
 # 针对模型的unet和文本编码器进行的训练
 def train_few_step(
     args,
@@ -121,7 +125,7 @@ def train_few_step(
         # 使用VAE对图像进行编码，并对潜在表示进行后处理
         latents = vae.encode(pixel_values).latent_dist.sample()
         latents = latents * vae.config.scaling_factor
-
+        # print(f'latents shape: {latents.shape}')
         # Sample noise that we'll add to the latents
         # 向图片编码向量（潜在空间向量表示）添加随机噪声
         noise = torch.randn_like(latents)
@@ -143,8 +147,9 @@ def train_few_step(
         
         # Predict the noise residual
         # 模型基于当前的噪声潜在表示（noisy_latents）、时间步（timesteps）和文本条件（encoder_hidden_states），预测噪声残差
+        # print(f'noisy_latents shape: {noisy_latents.shape}')
         model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
-
+        # print('model_pred shape', model_pred.shape)
         # Get the target for loss depending on the prediction type
         # 预测的可以是噪声，也可以是变化速度
         if noise_scheduler.config.prediction_type == "epsilon":
@@ -153,62 +158,87 @@ def train_few_step(
             target = noise_scheduler.get_velocity(latents, noise, timesteps)
         else:
             raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
-
         # vkeilo add it
-        theta_noise_epsion = args.sampling_step_theta * args.sampling_noise_ratio
-        back_parameters_unet = unet.state_dict()
-        mean_theta_unet = unet.state_dict()
-        back_parameters_textencoder = text_encoder.state_dict()
-        mean_theta_textencoder = text_encoder.state_dict()
-        for _sample in range(args.sampling_times_theta):
-            # with prior preservation loss
-            # 可选是否使用先验保留损失
-            optimizer.zero_grad()
+        # theta_noise_epsion = args.sampling_step_theta * args.sampling_noise_ratio
+        # back_parameters_unet = unet.state_dict()
+        # mean_theta_unet = unet.state_dict()
+        # back_parameters_textencoder = text_encoder.state_dict()
+        # mean_theta_textencoder = text_encoder.state_dict()
+        # for _sample in range(args.sampling_times_theta):
+        #     # with prior preservation loss
+        #     # 可选是否使用先验保留损失
+        #     optimizer.zero_grad()
 
-            if args.with_prior_preservation:
-                # 再次分为一半一半，对应之前的stack操作
-                model_pred, model_pred_prior = torch.chunk(model_pred, 2, dim=0)
-                target, target_prior = torch.chunk(target, 2, dim=0)
+        #     if args.with_prior_preservation:
+        #         # 再次分为一半一半，对应之前的stack操作
+        #         print('model_pred shape before chunk', model_pred.shape)
+        #         model_pred, model_pred_prior = torch.chunk(model_pred, 2, dim=0)
+        #         target, target_prior = torch.chunk(target, 2, dim=0)
 
-                # Compute instance loss
-                instance_loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+        #         # Compute instance loss
+        #         instance_loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
 
-                # Compute prior loss  确保在原来类别上的生成能力不丢失
-                prior_loss = F.mse_loss(model_pred_prior.float(), target_prior.float(), reduction="mean")
+        #         # Compute prior loss  确保在原来类别上的生成能力不丢失
+        #         prior_loss = F.mse_loss(model_pred_prior.float(), target_prior.float(), reduction="mean")
 
-                # Add the prior loss to the instance loss.
-                loss = instance_loss + args.prior_loss_weight * prior_loss
+        #         # Add the prior loss to the instance loss.
+        #         loss = instance_loss + args.prior_loss_weight * prior_loss
 
-            else:
-                # 不使用先验保留损失
-                loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
-            # 反向传播
-            loss.backward(retain_graph=retain_graph)
-            # 梯度裁剪
-            torch.nn.utils.clip_grad_norm_(params_to_optimize, 1.0, error_if_nonfinite=True)
-            # 参数优化
-            optimizer.step()
-            # optimizer.zero_grad()
-            for name, p in unet.named_parameters():
-                # lr_now = lr_scheduler.get_last_lr()[0]
-                lr_now = 1e-4
-                # 参数采样
-                p.data = utils.SGLD(p.data, lr_now, args.theta_noise_epsion)
-                # 模型参数也使用指数平均
-                mean_theta_unet[name] = args.beta_s * mean_theta_unet[name] + (1 - args.beta_s) * p.data
-            for name, p in text_encoder.named_parameters():
-                # lr_now = lr_scheduler.get_last_lr()[0]
-                lr_now = 1e-4
-                # 参数采样
-                p.data = utils.SGLD(p.data, lr_now, args.theta_noise_epsion)
-                # 模型参数也使用指数平均
-                mean_theta_textencoder[name] = args.beta_s * mean_theta_textencoder[name] + (1 - args.beta_s) * p.data
-        for name in back_parameters_unet:
-            back_parameters_unet[name] = args.beta_p * back_parameters_unet[name] + (1 - args.beta_p) * mean_theta_unet[name]
-        for name in back_parameters_textencoder:
-            back_parameters_textencoder[name] = args.beta_p * back_parameters_textencoder[name] + (1 - args.beta_p) * mean_theta_textencoder[name]
-        unet.load_state_dict(back_parameters_unet)
-        text_encoder.load_state_dict(back_parameters_textencoder)
+        #     else:
+        #         # 不使用先验保留损失
+        #         loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+        #     # 反向传播
+        #     loss.backward(retain_graph=retain_graph)
+        #     # 梯度裁剪
+        #     torch.nn.utils.clip_grad_norm_(params_to_optimize, 1.0, error_if_nonfinite=True)
+        #     # 参数优化
+        #     optimizer.step()
+        #     # optimizer.zero_grad()
+        #     for name, p in unet.named_parameters():
+        #         # lr_now = lr_scheduler.get_last_lr()[0]
+        #         lr_now = 1e-4
+        #         # 参数采样
+        #         p.data = utils.SGLD(p.data, lr_now, theta_noise_epsion)
+        #         # 模型参数也使用指数平均
+        #         mean_theta_unet[name] = args.beta_s * mean_theta_unet[name] + (1 - args.beta_s) * p.data
+        #     for name, p in text_encoder.named_parameters():
+        #         # lr_now = lr_scheduler.get_last_lr()[0]
+        #         lr_now = 1e-4
+        #         # 参数采样
+        #         p.data = utils.SGLD(p.data, lr_now, theta_noise_epsion)
+        #         # 模型参数也使用指数平均
+        #         mean_theta_textencoder[name] = args.beta_s * mean_theta_textencoder[name] + (1 - args.beta_s) * p.data
+        # for name in back_parameters_unet:
+        #     back_parameters_unet[name] = args.beta_p * back_parameters_unet[name] + (1 - args.beta_p) * mean_theta_unet[name]
+        # for name in back_parameters_textencoder:
+        #     back_parameters_textencoder[name] = args.beta_p * back_parameters_textencoder[name] + (1 - args.beta_p) * mean_theta_textencoder[name]
+        # unet.load_state_dict(back_parameters_unet)
+        # text_encoder.load_state_dict(back_parameters_textencoder)
+
+        if args.with_prior_preservation:
+            # 再次分为一半一半，对应之前的stack操作
+            model_pred, model_pred_prior = torch.chunk(model_pred, 2, dim=0)
+            target, target_prior = torch.chunk(target, 2, dim=0)
+
+            # Compute instance loss
+            instance_loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+
+            # Compute prior loss  确保在原来类别上的生成能力不丢失
+            prior_loss = F.mse_loss(model_pred_prior.float(), target_prior.float(), reduction="mean")
+
+            # Add the prior loss to the instance loss.
+            loss = instance_loss + args.prior_loss_weight * prior_loss
+
+        else:
+            # 不使用先验保留损失
+            loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+        # 反向传播
+        loss.backward(retain_graph=retain_graph)
+        # 梯度裁剪
+        torch.nn.utils.clip_grad_norm_(params_to_optimize, 1.0, error_if_nonfinite=True)
+        # 参数优化
+        optimizer.step()
+        optimizer.zero_grad()
     pbar.close()
     # 返回训练的参数数据
     if step_wise_save:
@@ -425,18 +455,18 @@ def parse_args():
         default=1000, 
     )
 
-    # vkeilo add it 
-    # 采样次数
+    # vkeilo add it
+    # 采样内部滑动平均参数
     parser.add_argument(
-        "--sampling_times_theta",
-        type=int,
-        default=10,
+        "--beta_s",
+        type=float,
+        default=0.3,
     )
 
     # vkeilo add it
-    # 滑动平均参数
+    # 参数更新的滑动平均参数
     parser.add_argument(
-        "--beta_s",
+        "--beta_p",
         type=float,
         default=0.3,
     )
@@ -446,7 +476,7 @@ def parse_args():
     parser.add_argument(
         "--sampling_times_theta",
         type=int,
-        default=20,
+        default=10,
     )
 
     # vkeilo add it
@@ -466,7 +496,7 @@ def parse_args():
     )
 
     # vkeilo add it
-    # 扰动采样（优化）步长
+    # 扰动采样（优化）步长,SGLD
     parser.add_argument(
         "--sampling_step_delta",
         type=float,
@@ -696,6 +726,7 @@ def main(args):
         # 打包unet和text_encoder
         f_ori = [unet, text_encoder]
         # 得到训练total_train_steps步之后的unet, text_encoder参数以及中间状态参数
+        print('start train few 702')
         f_ori, step2state_dict = train_few_step(
                 args,
                 f_ori,
@@ -731,7 +762,7 @@ def main(args):
     # learning perturbation over the ensemble of models
     # 在多个模型集合上进行扰动优化
     # 多次实验
-    total_iterations = args.epochs * len(train_dataloader)
+    # total_iterations = args.epochs * len(train_dataloader)
     for _ in range(args.total_trail_num):
         # 针对每一个模型
         for model_i in range(num_models):
@@ -760,43 +791,52 @@ def main(args):
                     cnt+=1
                     # 在新的扰动数据下，训练advance_steps步，后续需要在此处引入随机性（多轮采样优化参数），并以参数的平均值作为模型的参数
                     # vkeilo add it
+                    theta_noise_epsion = args.sampling_step_theta * args.sampling_noise_ratio
                     # back_parameters_list = [f[0].state_dict(), f[1].state_dict()]
                     # mean_theta_list = [f[0].state_dict(), f[1].state_dict()]
-                    # for k in range(args.sampling_times_theta):
-                    #     f = train_few_step(
-                    #         args,
-                    #         f,
-                    #         tokenizer,
-                    #         noise_scheduler,
-                    #         vae,
-                    #         perturbed_data.float(),
-                    #         args.advance_steps,
-                    #     )
-                    #     for model in f:
-                    #         for name, p in model.named_parameters():
-                    #             # 先尝试固定学习率的（因为迭代次数暂未确定）
-                    #             # lr_now = lr_scheduler.get_last_lr()[0]
-                    #             # 参数采样,引入随机性
-                    #             p.data = utils.SGLD(p.data, args.sampling_step_delta, theta_noise_epsion)
-                    #             # 模型参数也使用指数平均
-                    #             mean_theta[name] = args.beta_s * mean_theta[name] + (1 - args.beta_s) * p.data
-                    # # lr_scheduler.step()
-                    # # 对于模型的unet和文本编码器，分别更新参数
-                    # for back_parameters, mean_theta in zip(back_parameters_list,mean_theta_list):
-                    #     for name in back_parameters:
-                    #         back_parameters[name] = args.beta_p * back_parameters[name] + (1 - args.beta_p) * mean_theta[name]
-                    # for index, model in enumerate(f):
-                    #     model.load_state_dict(back_parameters_list[index])
-                    
-                    f = train_few_step(
-                        args,
-                        f,
-                        tokenizer,
-                        noise_scheduler,
-                        vae,
-                        perturbed_data.float(),
-                        args.advance_steps,
-                    )
+                    # 确保 back_parameters_list 和 mean_theta_list 中的所有参数都位于 CPU 上
+                    back_parameters_list = [{k: v.clone().detach().to('cpu') for k, v in f[0].state_dict().items()},
+                                            {k: v.clone().detach().to('cpu') for k, v in f[1].state_dict().items()}]
+
+                    mean_theta_list = [{k: v.clone().detach().to('cpu') for k, v in f[0].state_dict().items()},
+                                    {k: v.clone().detach().to('cpu') for k, v in f[1].state_dict().items()}]
+                    print(f'start sample theta {args.sampling_times_theta} times')
+                    for k in range(args.sampling_times_theta):
+                        print(f'sample theta {k}/{args.sampling_times_theta} times')
+                        f = train_few_step(
+                            args,
+                            f,
+                            tokenizer,
+                            noise_scheduler,
+                            vae,
+                            perturbed_data.float(),
+                            args.advance_steps,
+                        )
+                        for model_index, model in enumerate(f):
+                            for name, p in model.named_parameters():
+                                # 先尝试固定学习率的（因为迭代次数暂未确定）
+                                # lr_now = lr_scheduler.get_last_lr()[0]
+                                # 参数采样,引入随机性
+                                p.data = utils.SGLD(p.data, args.sampling_step_theta, theta_noise_epsion)
+                                # 模型参数也使用指数平均
+                                mean_theta_list[model_index][name] = args.beta_s * mean_theta_list[model_index][name] + (1 - args.beta_s) * p.data.to('cpu')
+                    # lr_scheduler.step()
+                    # 对于模型的unet和文本编码器，分别更新参数
+                    for back_parameters, mean_theta in zip(back_parameters_list,mean_theta_list):
+                        for name in back_parameters:
+                            back_parameters[name] = args.beta_p * back_parameters[name] + (1 - args.beta_p) * mean_theta[name]
+                    for index, model in enumerate(f):
+                        model.load_state_dict({k: v.to(device_g) for k, v in back_parameters_list[index].items()})
+
+                    # f = train_few_step(
+                    #     args,
+                    #     f,
+                    #     tokenizer,
+                    #     noise_scheduler,
+                    #     vae,
+                    #     perturbed_data.float(),
+                    #     args.advance_steps,
+                    # )
                     pbar.update(1)
                     # 每1000次扰动优化，保存一次扰动示例图像
                     if cnt % 1000 == 0:
