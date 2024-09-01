@@ -1,7 +1,7 @@
 # source activate $ADB_ENV_NAME;
 dir_of_this_file="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 source $dir_of_this_file/generic.sh
-which python
+PYTHONPATH=$PYTHONPATH$:/data/home/yekai/github/mypro
 ###### the following are method-related variables ######
 alg_file_name="metacloak_vk"
 round=final
@@ -13,6 +13,7 @@ if [ -z "$defense_sample_num" ]; then
 fi
 
 cd $ADB_PROJECT_ROOT/robust_facecloak
+which python
 # skip if noise exists 
 if [ ! -d "$INSTANCE_DIR_CHECK" ]; then 
   {
@@ -45,12 +46,12 @@ if [ ! -d "$INSTANCE_DIR_CHECK" ]; then
     --learning_rate=5e-7 \
     --defense_pgd_radius=$r \
     --defense_pgd_step_size=$step_size \
-    --defense_pgd_step_num=6 \
+    --defense_pgd_step_num=$defense_pgd_step_num \
     --defense_sample_num=$defense_sample_num \
     --defense_pgd_ascending \
     --attack_pgd_radius=0 \
-    --attack_pgd_step_size=1 \
-    --attack_pgd_step_num=3 \
+    --attack_pgd_step_size=1 \  
+    --attack_pgd_step_num=$attack_pgd_step_num \
     --mixed_precision=fp16 \
     --sampling_times_theta=$sampling_times_theta \
     --beta_s=0.3 \

@@ -1,8 +1,9 @@
 import math
 import torch
 
-def init_delta(size, epsilon=1e-1, init_type="zero"):
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+def init_delta(size, epsilon=1e-1, init_type="zero", device=None):
+    if device is None:
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     if init_type == "zero":
         return torch.zeros(size, device=device)
     elif init_type == "rand":
@@ -33,6 +34,9 @@ def ls(P, Q, task_name):
         return ls_fn(P, Q)
 
 def SGLD(x, step, epsilon):
-    noise = init_delta(x.size(), epsilon=epsilon, init_type="randn")
+    device = x.device
+    noise = init_delta(x.size(), epsilon=epsilon, init_type="randn", device=device)
     x = x + math.sqrt(2 * step) * noise
+    del noise
+    torch.cuda.empty_cache()
     return x

@@ -178,7 +178,7 @@ class RobustPGDAttacker():
                 x = self._clip_(x, ori_x, ).detach_()
         return x.cpu()
         
-    def perturb(self, models, x, ori_x, vae, tokenizer, noise_scheduler, target_tensor=None, adaptive_target=False, loss_type=None):
+    def perturb(self, models, x, ori_x, vae, tokenizer, noise_scheduler, target_tensor=None, adaptive_target=False, loss_type=None, device = torch.device("cuda")):
         args=self.args
         unet, text_encoder = models
         weight_dtype = torch.bfloat16
@@ -189,7 +189,6 @@ class RobustPGDAttacker():
         elif args.mixed_precision == "bf16":
             weight_dtype = torch.bfloat16
 
-        
         device = torch.device("cuda")
         vae.to(device, dtype=weight_dtype)
         text_encoder.to(device, dtype=weight_dtype)
@@ -227,9 +226,13 @@ class RobustPGDAttacker():
         
         x.requires_grad_(True)
         # 多次采样
+        print(f'defender start {self.steps} steps perturb')
         for _step in range(self.steps):
+            print(f'\tdefender {_step}/{self.steps} step perturb')
             x.requires_grad = True
+            print(f'\tdefender start {self.sample_num} samples perturb')
             for _sample in range(self.sample_num):
+                print(f'\t\tdefender{_sample}/{self.sample_num} sample perturb')
                 
                 def_x_trans = self.transform(x).to(device, dtype=weight_dtype)
                 adv_x = self.attacker.perturb(
@@ -251,7 +254,7 @@ class RobustPGDAttacker():
                 else:
                     raise NotImplementedError
                 x = self._clip_(x, ori_x, ).detach_()
-        
+            # wandb.log({"Adversarial Loss": loss.item()})  
         ''' reopen autograd of model after pgd '''
         for mi in [text_encoder, unet]:
             for pp in mi.parameters():

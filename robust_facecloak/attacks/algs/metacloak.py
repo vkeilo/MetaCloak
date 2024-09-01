@@ -499,7 +499,7 @@ def main(args):
                     image_filename = class_images_dir / f"{example['index'][i] + cur_class_images}-{hash_image}.jpg"
                     image.save(image_filename)
             # 删除模型，释放显存
-            del pipelineß
+            del pipeline
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
     

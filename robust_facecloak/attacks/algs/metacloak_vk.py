@@ -37,6 +37,7 @@ from robust_facecloak.generic.data_utils import PromptDataset, load_data
 from robust_facecloak.generic.share_args import share_parse_args
 # vkeilo add it
 import utils
+import GPUtil
 
 
 logger = get_logger(__name__)
@@ -60,10 +61,15 @@ def train_few_step(
     step_wise_save=False,
     save_step=100, 
     retain_graph=False,
+    dpcopy = True,
 ):
     # Load the tokenizer
-
-    unet, text_encoder = copy.deepcopy(models[0]), copy.deepcopy(models[1])
+    # vkeilo remove deepcopy
+    if dpcopy:
+        unet, text_encoder = copy.deepcopy(models[0]), copy.deepcopy(models[1])
+    else:
+        unet, text_encoder = models[0], models[1]
+    # unet, text_encoder = models[0], models[1]
     # 绑定unet和文本编码器的参数，共同优化
     params_to_optimize = itertools.chain(unet.parameters(), text_encoder.parameters())
 
@@ -261,6 +267,11 @@ def load_model(args, model_path):
     )
     # unet加载
     unet = UNet2DConditionModel.from_pretrained(model_path, subfolder="unet", revision=args.revision)
+
+    # vkeilo add it
+    # text_encoder = text_encoder.bfloat16()
+    # unet = unet.bfloat16()
+
     # tokenizer加载
     tokenizer = AutoTokenizer.from_pretrained(
         model_path,
@@ -599,7 +610,7 @@ def main(args):
                     image_filename = class_images_dir / f"{example['index'][i] + cur_class_images}-{hash_image}.jpg"
                     image.save(image_filename)
             # 删除模型，释放显存
-            del pipelineß
+            del pipeline
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
     
@@ -659,6 +670,27 @@ def main(args):
     from robust_facecloak.attacks.worker.robust_pgd_worker import RobustPGDAttacker
     from MetaCloak.robust_facecloak.attacks.worker.pgd_worker_vk import PGDAttacker
     # 构建攻击者和防御者，攻击者使用PGD算法
+    # attacker = PGDAttacker(
+    #     radius=args.attack_pgd_radius, 
+    #     steps=args.attack_pgd_step_num, 
+    #     step_size=args.attack_pgd_step_size,
+    #     random_start=args.attack_pgd_random_start,
+    #     ascending=args.attack_pgd_ascending,
+    #     args=args, 
+    #     x_range=[-1, 1],
+    # )
+    # defender = RobustPGDAttacker(
+    #     radius=args.defense_pgd_radius,
+    #     steps=args.defense_pgd_step_num, # 6
+    #     step_size=args.defense_pgd_step_size,
+    #     random_start=args.defense_pgd_random_start,
+    #     ascending=args.defense_pgd_ascending,
+    #     args=args,
+    #     attacker=attacker, 
+    #     trans=all_trans,
+    #     sample_num=args.defense_sample_num,
+    #     x_range=[0, 255],
+    # )
     attacker = PGDAttacker(
         radius=args.attack_pgd_radius, 
         steps=args.attack_pgd_step_num, 
@@ -670,7 +702,7 @@ def main(args):
     )
     defender = RobustPGDAttacker(
         radius=args.defense_pgd_radius,
-        steps=args.defense_pgd_step_num,
+        steps=args.defense_pgd_step_num, # 6
         step_size=args.defense_pgd_step_size,
         random_start=args.defense_pgd_random_start,
         ascending=args.defense_pgd_ascending,
@@ -726,7 +758,7 @@ def main(args):
         # 打包unet和text_encoder
         f_ori = [unet, text_encoder]
         # 得到训练total_train_steps步之后的unet, text_encoder参数以及中间状态参数
-        print('start train few 702')
+        # print('start train few 702')
         f_ori, step2state_dict = train_few_step(
                 args,
                 f_ori,
@@ -751,7 +783,7 @@ def main(args):
     
     # 提取保存的中间状态的step数据（1000，2000，3000.....）        
     steps_list = list(init_model_state_pool[0].keys())
-    # 进度条，总train_few_step调用的次数
+    # 进度条，总train_few_step调用的次数*模型数量1*
     pbar = tqdm(total=args.total_trail_num * num_models * (args.interval // args.advance_steps) * len(steps_list), desc="meta poison with model ensemble")
     cnt=0
     # vkeilo add it  确定噪声强度
@@ -763,6 +795,12 @@ def main(args):
     # 在多个模型集合上进行扰动优化
     # 多次实验
     # total_iterations = args.epochs * len(train_dataloader)
+
+    gpus = GPUtil.getGPUs()
+    gpu = gpus[1]
+    device_0 = torch.device('cuda:0')
+    device_1 = torch.device('cuda:1')
+
     for _ in range(args.total_trail_num):
         # 针对每一个模型
         for model_i in range(num_models):
@@ -774,6 +812,8 @@ def main(args):
                 unet.load_state_dict(init_model_state_pool[model_i][split_step]["unet"])
                 text_encoder.load_state_dict(init_model_state_pool[model_i][split_step]["text_encoder"])
                 f = [unet, text_encoder]
+                # f = [unet.to(device_1), text_encoder.to(device_1)]
+                
                 # 每advance_steps步进行一次防御优化
                 for j in range(args.interval // args.advance_steps):
                     # 更新一次扰动，使得扰动更加强大,后续需要在此处引入随机性（多轮采样优化），并以扰动的平均值作为后续的扰动
@@ -786,21 +826,38 @@ def main(args):
                     #     mean_delta = args.beta_s * mean_delta + (1 - args.beta_s) * perturbed_data
                     # perturbed_data = mean_delta
                     # mean_delta.detach()
-                    perturbed_data = defender.perturb(f, perturbed_data, original_data, vae, tokenizer, noise_scheduler,)
+                    # f[0] = f[0].to(device_0)
+                    # f[1] = f[1].to(device_0)
+                    perturbed_data = defender.perturb(f, perturbed_data, original_data, vae, tokenizer, noise_scheduler)
+                    
                     # 扰动优化次数更新 +1
                     cnt+=1
                     # 在新的扰动数据下，训练advance_steps步，后续需要在此处引入随机性（多轮采样优化参数），并以参数的平均值作为模型的参数
                     # vkeilo add it
+                    # print(f"\nbefore back params, GPU: {gpu.name}, Free Memory: {gpu.memoryFree / 1024:.2f} GB")
                     theta_noise_epsion = args.sampling_step_theta * args.sampling_noise_ratio
-                    # back_parameters_list = [f[0].state_dict(), f[1].state_dict()]
-                    # mean_theta_list = [f[0].state_dict(), f[1].state_dict()]
-                    # 确保 back_parameters_list 和 mean_theta_list 中的所有参数都位于 CPU 上
-                    back_parameters_list = [{k: v.clone().detach().to('cpu') for k, v in f[0].state_dict().items()},
-                                            {k: v.clone().detach().to('cpu') for k, v in f[1].state_dict().items()}]
 
-                    mean_theta_list = [{k: v.clone().detach().to('cpu') for k, v in f[0].state_dict().items()},
-                                    {k: v.clone().detach().to('cpu') for k, v in f[1].state_dict().items()}]
-                    print(f'start sample theta {args.sampling_times_theta} times')
+                    # back_parameters_list = [{k: v.clone().detach().to(device_1) for k, v in f[0].state_dict().items()},
+                    #                         {k: v.clone().detach().to(device_1) for k, v in f[1].state_dict().items()}]
+
+                    # mean_theta_list = [{k: v.clone().detach().to(device_1) for k, v in f[0].state_dict().items()},
+                    #                 {k: v.clone().detach().to(device_1) for k, v in f[1].state_dict().items()}]
+                    # f[0] = f[0].to(device_1)
+                    # f[1] = f[1].to(device_1)
+                    back_parameters_list = [f[0].state_dict(),
+                                            f[1].state_dict()]
+
+                    mean_theta_list = [f[0].state_dict(),
+                                    f[1].state_dict()]
+                    
+                    # 确保 back_parameters_list 和 mean_theta_list 中的所有参数都位于 CPU 上
+                    # back_parameters_list = [{k: v.clone().detach().to('cpu') for k, v in f[0].state_dict().items()},
+                    #                         {k: v.clone().detach().to('cpu') for k, v in f[1].state_dict().items()}]
+
+                    # mean_theta_list = [{k: v.clone().detach().to('cpu') for k, v in f[0].state_dict().items()},
+                    #                 {k: v.clone().detach().to('cpu') for k, v in f[1].state_dict().items()}]
+                    # print(f"after back params, GPU: {gpu.name}, Free Memory: {gpu.memoryFree / 1024:.2f} GB")
+                    # print(f'start sample theta {args.sampling_times_theta} times')
                     for k in range(args.sampling_times_theta):
                         print(f'sample theta {k}/{args.sampling_times_theta} times')
                         f = train_few_step(
@@ -811,23 +868,38 @@ def main(args):
                             vae,
                             perturbed_data.float(),
                             args.advance_steps,
+                            # device = device_1
+                            dpcopy = False,
                         )
+                        torch.cuda.empty_cache()
                         for model_index, model in enumerate(f):
+                            # print(f"\nbefore culcu, GPU: {gpu.name}, Free Memory: {gpu.memoryFree / 1024:.2f} GB")
                             for name, p in model.named_parameters():
                                 # 先尝试固定学习率的（因为迭代次数暂未确定）
                                 # lr_now = lr_scheduler.get_last_lr()[0]
                                 # 参数采样,引入随机性
                                 p.data = utils.SGLD(p.data, args.sampling_step_theta, theta_noise_epsion)
                                 # 模型参数也使用指数平均
-                                mean_theta_list[model_index][name] = args.beta_s * mean_theta_list[model_index][name] + (1 - args.beta_s) * p.data.to('cpu')
+                                # mean_theta_list[model_index][name] = args.beta_s * mean_theta_list[model_index][name] + (1 - args.beta_s) * p.data.to('cpu')
+                                # mean_theta_list[model_index][name] = args.beta_s * mean_theta_list[model_index][name] + (1 - args.beta_s) * p.data
+                                mean_theta_list[model_index][name].mul_(args.beta_s).add_((1 - args.beta_s) * p.data)
+                            # print(f"\nafter calcu params, GPU: {gpu.name}, Free Memory: {gpu.memoryFree / 1024:.2f} GB")
+                            # torch.cuda.empty_cache()
                     # lr_scheduler.step()
                     # 对于模型的unet和文本编码器，分别更新参数
                     for back_parameters, mean_theta in zip(back_parameters_list,mean_theta_list):
                         for name in back_parameters:
                             back_parameters[name] = args.beta_p * back_parameters[name] + (1 - args.beta_p) * mean_theta[name]
+                            # back_parameters[name] = back_parameters[name].float()
+                            # back_parameters[name].mul_(args.beta_p).add_((1 - args.beta_p) * mean_theta[name])
                     for index, model in enumerate(f):
-                        model.load_state_dict({k: v.to(device_g) for k, v in back_parameters_list[index].items()})
-
+                        # model.load_state_dict({k: v.to(device_g) for k, v in back_parameters_list[index].items()})
+                        model.load_state_dict(back_parameters_list[index])
+                        pass
+                    del back_parameters_list
+                    del mean_theta_list
+                    gc.collect()
+                    torch.cuda.empty_cache()
                     # f = train_few_step(
                     #     args,
                     #     f,
@@ -841,7 +913,6 @@ def main(args):
                     # 每1000次扰动优化，保存一次扰动示例图像
                     if cnt % 1000 == 0:
                         save_image(perturbed_data, f"{cnt}")
-                
                 # frequently release the memory due to limited GPU memory, 
                 # env with more gpu might consider to remove the following lines for boosting speed
                 # 释放资源

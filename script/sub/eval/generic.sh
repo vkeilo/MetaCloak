@@ -26,6 +26,7 @@ export TEXTUAL_INVERSION_OUTPUT_DIR="$ADB_PROJECT_ROOT/exp_data/train_output/$tr
 cd $ADB_PROJECT_ROOT/robust_facecloak
 instance_prompt="a photo of $eval_prompt $class_name"
 source activate $ADB_ENV_NAME;
+# vkeilo add it
 conda activate Metacloak
 
 # this is to indicate that whether we have finished the training before 
@@ -37,6 +38,8 @@ if [ ! -d "$INSTANCE_DIR" ]; then
   echo "instance data not exist, skip training"
   exit 1
 fi
+
+echo "start dreambooth training"
 
 command="""python3 train_dreambooth.py --clean_img_dir $CLEAN_INSTANCE_DIR --clean_ref_db $CLEAN_REF  --instance_name $instance_name --dataset_name $dataset_name --class_name '$class_name' \
 --wandb_entity_name $wandb_entity_name \

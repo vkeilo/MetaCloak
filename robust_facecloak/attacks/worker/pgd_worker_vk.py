@@ -65,7 +65,7 @@ class PGDAttacker():
     
     def perturb(self, models, x,ori_x,vae, tokenizer, noise_scheduler, target_tensor=None,device=torch.device("cuda"), close_grad_for_efficiency =False):
         if self.noattack:
-            # print("no need to attack")
+            print("no need to attack")
             return x 
         
         args=self.args
@@ -104,8 +104,9 @@ class PGDAttacker():
         # vkeilo add it
         delta_noise_epsion = self.args.sampling_step_delta *self.args.sampling_noise_ratio
         mean_adv_x = adv_x.clone().detach()
-        print(f'start sample noise {self.steps} steps')
+        print(f'\t\tattacker start {self.steps} steps PGDAttacker perturb')
         for step in range(self.steps):
+            print(f'\t\t\tPGDAttacker perturb step {step}/{self.steps}')
             adv_x.requires_grad_()
             loss = self.certi(models, adv_x,vae, noise_scheduler, input_ids, device, weight_dtype, target_tensor)
     
@@ -121,7 +122,8 @@ class PGDAttacker():
 
             # vkeilo add it
             adv_x = utils.SGLD(adv_x, self.args.sampling_step_delta, delta_noise_epsion).detach()
-            mean_adv_x = self.args.beta_s * mean_adv_x + (1 - self.args.beta_s) * adv_x
+            # mean_adv_x = self.args.beta_s * mean_adv_x + (1 - self.args.beta_s) * adv_x
+            mean_adv_x.mul_(self.args.beta_s).add_((1 - self.args.beta_s) * adv_x)
 
             
         with torch.no_grad():
