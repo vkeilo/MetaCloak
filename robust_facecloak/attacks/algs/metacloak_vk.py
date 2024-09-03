@@ -62,6 +62,7 @@ def train_few_step(
     save_step=100, 
     retain_graph=False,
     dpcopy = True,
+    task_loss_name = None,
 ):
     # Load the tokenizer
     # vkeilo remove deepcopy
@@ -238,6 +239,8 @@ def train_few_step(
         else:
             # 不使用先验保留损失
             loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+        if not task_loss_name is None:
+            wandb.log({f"{task_loss_name}": loss.item()})
         # 反向传播
         loss.backward(retain_graph=retain_graph)
         # 梯度裁剪
@@ -375,7 +378,7 @@ def parse_args():
         default=2,
         help="The step size for attack pgd.",
     )
-    # 攻击 PGD 的步数
+    # 攻击 PGD 的步数,就是一次扰动更新的采样次数
     parser.add_argument(
         "--attack_pgd_step_num",
         type=int,
@@ -521,7 +524,14 @@ def parse_args():
         type=float,
         default=0.05,
     )
-
+    
+    # # vkeilo add it
+    # # defender 每次更新参扰动的采样次数
+    # parser.add_argument(
+    #     "--step_sample_num",
+    #     type=int,
+    #     default=1,
+    # )
     
     args = parser.parse_args()
     return args
@@ -667,8 +677,8 @@ def main(args):
     all_trans = transforms.Compose(all_trans)
     
     
-    from robust_facecloak.attacks.worker.robust_pgd_worker import RobustPGDAttacker
-    from MetaCloak.robust_facecloak.attacks.worker.pgd_worker_vk import PGDAttacker
+    from robust_facecloak.attacks.worker.robust_pgd_worker_vkecholoss import RobustPGDAttacker
+    from MetaCloak.robust_facecloak.attacks.worker.pgd_worker import PGDAttacker
     # 构建攻击者和防御者，攻击者使用PGD算法
     # attacker = PGDAttacker(
     #     radius=args.attack_pgd_radius, 
@@ -711,6 +721,8 @@ def main(args):
         trans=all_trans,
         sample_num=args.defense_sample_num,
         x_range=[0, 255],
+        # vkeilo add it
+        # step_sample_num=args.sampling_times_delta
     )
 
     # 模型加载，本次实验只有一个
@@ -769,6 +781,7 @@ def main(args):
                 args.total_train_steps,
                 step_wise_save=True,
                 save_step=args.interval,
+                task_loss_name="ori_model_train_loss",
         )  
         # init_model_state_pool就来保存训练中间状态参数
         init_model_state_pool[j] = step2state_dict
@@ -780,15 +793,15 @@ def main(args):
         torch.cuda.empty_cache()
         pbar.update(1)
     pbar.close()
-    
     # 提取保存的中间状态的step数据（1000，2000，3000.....）        
     steps_list = list(init_model_state_pool[0].keys())
+    print(steps_list)
     # 进度条，总train_few_step调用的次数*模型数量1*
     pbar = tqdm(total=args.total_trail_num * num_models * (args.interval // args.advance_steps) * len(steps_list), desc="meta poison with model ensemble")
     cnt=0
     # vkeilo add it  确定噪声强度
-    # theta_noise_epsion = args.sampling_step_theta * args.sampling_noise_ratio
-    # delta_noise_epsion = args.sampling_step_delta * args.sampling_noise_ratio
+    theta_noise_epsion = args.sampling_step_theta * args.sampling_noise_ratio
+    delta_noise_epsion = args.sampling_step_delta * args.sampling_noise_ratio
 
 
     # learning perturbation over the ensemble of models
@@ -814,50 +827,39 @@ def main(args):
                 f = [unet, text_encoder]
                 # f = [unet.to(device_1), text_encoder.to(device_1)]
                 
-                # 每advance_steps步进行一次防御优化
+                # 每advance_steps步进行一次防御优化/对于每一组模型参数，进行200/2=100次对抗训练
+                print(f'start {args.interval // args.advance_steps} times of defense optimization in step-{split_step} model')
                 for j in range(args.interval // args.advance_steps):
                     # 更新一次扰动，使得扰动更加强大,后续需要在此处引入随机性（多轮采样优化），并以扰动的平均值作为后续的扰动
                     # vkeilo add it
-                    # mean_delta = perturbed_data
-                    # for k in range(args.sampling_times_theta):
-                    #     perturbed_data = defender.perturb(f, perturbed_data, original_data, vae, tokenizer, noise_scheduler,)
-                    #     # 此处引入随机梯度朗之万动力学
-                    #     perturbed_data = utils.SGLD(perturbed_data, args.sampling_step_delta, delta_noise_epsion).detach()
-                    #     mean_delta = args.beta_s * mean_delta + (1 - args.beta_s) * perturbed_data
-                    # perturbed_data = mean_delta
-                    # mean_delta.detach()
+                    mean_delta = perturbed_data.clone().detach()
+                    print(f'start {args.sampling_times_theta} times of delta sampling ')
+                    for k in range(args.sampling_times_theta):
+                        print(f'sample delta {k}/{args.sampling_times_theta} times')
+                        perturbed_data,rubust_loss = defender.perturb(f, perturbed_data, original_data, vae, tokenizer, noise_scheduler,)
+                        wandb.log({"defender_rubust_loss": rubust_loss})
+                        # 此处引入随机梯度朗之万动力学
+                        perturbed_data = utils.SGLD(perturbed_data, args.sampling_step_delta, delta_noise_epsion).detach()
+                        mean_delta = args.beta_s * mean_delta + (1 - args.beta_s) * perturbed_data
+                    perturbed_data = mean_delta
+                    mean_delta.detach()
                     # f[0] = f[0].to(device_0)
                     # f[1] = f[1].to(device_0)
-                    perturbed_data = defender.perturb(f, perturbed_data, original_data, vae, tokenizer, noise_scheduler)
+                    # perturbed_data = defender.perturb(f, perturbed_data, original_data, vae, tokenizer, noise_scheduler)
                     
                     # 扰动优化次数更新 +1
                     cnt+=1
                     # 在新的扰动数据下，训练advance_steps步，后续需要在此处引入随机性（多轮采样优化参数），并以参数的平均值作为模型的参数
                     # vkeilo add it
                     # print(f"\nbefore back params, GPU: {gpu.name}, Free Memory: {gpu.memoryFree / 1024:.2f} GB")
-                    theta_noise_epsion = args.sampling_step_theta * args.sampling_noise_ratio
 
-                    # back_parameters_list = [{k: v.clone().detach().to(device_1) for k, v in f[0].state_dict().items()},
-                    #                         {k: v.clone().detach().to(device_1) for k, v in f[1].state_dict().items()}]
-
-                    # mean_theta_list = [{k: v.clone().detach().to(device_1) for k, v in f[0].state_dict().items()},
-                    #                 {k: v.clone().detach().to(device_1) for k, v in f[1].state_dict().items()}]
-                    # f[0] = f[0].to(device_1)
-                    # f[1] = f[1].to(device_1)
                     back_parameters_list = [f[0].state_dict(),
                                             f[1].state_dict()]
 
                     mean_theta_list = [f[0].state_dict(),
                                     f[1].state_dict()]
                     
-                    # 确保 back_parameters_list 和 mean_theta_list 中的所有参数都位于 CPU 上
-                    # back_parameters_list = [{k: v.clone().detach().to('cpu') for k, v in f[0].state_dict().items()},
-                    #                         {k: v.clone().detach().to('cpu') for k, v in f[1].state_dict().items()}]
-
-                    # mean_theta_list = [{k: v.clone().detach().to('cpu') for k, v in f[0].state_dict().items()},
-                    #                 {k: v.clone().detach().to('cpu') for k, v in f[1].state_dict().items()}]
-                    # print(f"after back params, GPU: {gpu.name}, Free Memory: {gpu.memoryFree / 1024:.2f} GB")
-                    # print(f'start sample theta {args.sampling_times_theta} times')
+                    print(f'start {args.sampling_times_theta} times of theta sampling')
                     for k in range(args.sampling_times_theta):
                         print(f'sample theta {k}/{args.sampling_times_theta} times')
                         f = train_few_step(
@@ -870,6 +872,7 @@ def main(args):
                             args.advance_steps,
                             # device = device_1
                             dpcopy = False,
+                            task_loss_name='model_theta_loss',
                         )
                         torch.cuda.empty_cache()
                         for model_index, model in enumerate(f):

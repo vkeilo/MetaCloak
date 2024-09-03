@@ -1,6 +1,6 @@
 #### Variables that you should set before running the script
 # setting the GPU id
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=0
 # for logging , please set your own wandb entity name
 export wandb_entity_name=vkeilo
 # for reproducibility
@@ -49,6 +49,7 @@ export INSTANCE_DIR=$OUTPUT_DIR/noise-ckpt/${round}
 export CLEAN_INSTANCE_DIR=$OUTPUT_DIR/image_before_addding_noise/
 export INSTANCE_DIR_CHECK=$INSTANCE_DIR
 
+export PYTHONPATH=$ADB_PROJECT_ROOT:$PYTHONPATH
 
 # generate the noise (metacloak.sh)
 bash ./sub/gen/$gen_file_name

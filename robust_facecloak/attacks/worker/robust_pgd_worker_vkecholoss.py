@@ -178,7 +178,7 @@ class RobustPGDAttacker():
                 x = self._clip_(x, ori_x, ).detach_()
         return x.cpu()
         
-    def perturb(self, models, x, ori_x, vae, tokenizer, noise_scheduler, target_tensor=None, adaptive_target=False, loss_type=None):
+    def perturb(self, models, x, ori_x, vae, tokenizer, noise_scheduler, target_tensor=None, adaptive_target=False, loss_type=None, device = torch.device("cuda")):
         args=self.args
         unet, text_encoder = models
         weight_dtype = torch.bfloat16
@@ -189,7 +189,6 @@ class RobustPGDAttacker():
         elif args.mixed_precision == "bf16":
             weight_dtype = torch.bfloat16
 
-        
         device = torch.device("cuda")
         vae.to(device, dtype=weight_dtype)
         text_encoder.to(device, dtype=weight_dtype)
@@ -200,6 +199,7 @@ class RobustPGDAttacker():
         
         
         if self.noattack:
+            print("defender no need to defend")
             return x
         
         # ''' temporarily shutdown autograd of model to improve pgd efficiency '''
@@ -227,41 +227,45 @@ class RobustPGDAttacker():
         
         x.requires_grad_(True)
         # 多次采样
-        # mean_delta = adv_x
+        loss_list = []
+        print(f'defender start {self.steps} steps perturb')
         for _step in range(self.steps):
+            print(f'\tdefender {_step}/{self.steps} step perturb')
             x.requires_grad = True
+            print(f'\tdefender start {self.sample_num} samples perturb')
+            # 默认一次更新就对抗扰动一次
             for _sample in range(self.sample_num):
-                
+                print(f'\t\tdefender{_sample}/{self.sample_num} sample perturb')
+                # 模拟微调训练方对图像进行一定变换以缓解毒性
                 def_x_trans = self.transform(x).to(device, dtype=weight_dtype)
+                # 获得被进一步对抗扰动后的样本adv_x
                 adv_x = self.attacker.perturb(
                     models, def_x_trans, self.transform(ori_x), vae, tokenizer, noise_scheduler, 
                 )
-                
+                # 在额外扰动的adv_x上评估模型鲁棒性
                 loss = self.certi(models, adv_x, vae, noise_scheduler, input_ids, device, weight_dtype, target_tensor,loss_type, ori_x,)
-                
+                loss_list.append(loss.item())
+                # 多次采样积累能够降低模型鲁棒性的梯度
                 loss.backward()
-
+            # 根据当前梯度信息更新x
             with torch.no_grad():
                 grad = x.grad.data
-                # vkeilo add it
-                # 引入SGLD
-                noise_sgld = torch.randn_like(grad) * torch.sqrt(torch.tensor(self.sampling_step_delta))
-
+                
                 if not self.ascending: 
                     grad.mul_(-1)
                     
                 if self.norm_type == 'l-infty':
-                    # vkeilo change it x.add_(torch.sign(grad), alpha=self.step_size)
-                    x.add_(torch.sign(grad) + noise_sgld, alpha=self.step_size)
+                    x.add_(torch.sign(grad), alpha=self.step_size)
                 else:
                     raise NotImplementedError
                 x = self._clip_(x, ori_x, ).detach_()
-        
+            # wandb.log({"Adversarial Loss": loss.item()})  
         ''' reopen autograd of model after pgd '''
         for mi in [text_encoder, unet]:
             for pp in mi.parameters():
                 pp.requires_grad = True
-        return x.cpu()
+        mean_loss = np.mean(loss_list)
+        return x.cpu(),mean_loss
     def _clip_(self, adv_x, x, ):
         adv_x = adv_x - x
         if self.norm_type == 'l-infty':

@@ -54,6 +54,7 @@ def train_few_step(
     step_wise_save=False,
     save_step=100, 
     retain_graph=False,
+    task_loss_name = None,
 ):
     # Load the tokenizer
 
@@ -171,6 +172,8 @@ def train_few_step(
         else:
             # 不使用先验保留损失
             loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+        if task_loss_name is not None:
+            wandb.log({f"{task_loss_name}": loss.item()})
         # 反向传播
         loss.backward(retain_graph=retain_graph)
         # 梯度裁剪
@@ -636,6 +639,7 @@ def main(args):
                 args.total_train_steps,
                 step_wise_save=True,
                 save_step=args.interval,
+                task_loss_name="ori_model_train_loss",
         )  
         # init_model_state_pool就来保存训练中间状态参数
         init_model_state_pool[j] = step2state_dict
@@ -678,8 +682,9 @@ def main(args):
                     #     mean_delta = args.beta_s * mean_delta + (1 - args.beta_s) * perturbed_data
                     # perturbed_data = mean_delta
                     # mean_data.detach()
-                    perturbed_data = defender.perturb(f, perturbed_data, original_data, vae, tokenizer, noise_scheduler,)
+                    perturbed_data,rubust_loss = defender.perturb(f, perturbed_data, original_data, vae, tokenizer, noise_scheduler,)
                     # 扰动优化次数更新 +1
+                    wandb.log({"defender_rubust_loss_without_MAT": rubust_loss})
                     cnt+=1
                     # 在新的扰动数据下，训练advance_steps步，后续需要在此处引入随机性（多轮采样优化参数），并以参数的平均值作为模型的参数
                     # vkeilo add it
@@ -718,6 +723,7 @@ def main(args):
                         vae,
                         perturbed_data.float(),
                         args.advance_steps,
+                        task_loss_name = "model_theta_loss_without_MAT"
                     )
                     pbar.update(1)
                     # 每1000次扰动优化，保存一次扰动示例图像

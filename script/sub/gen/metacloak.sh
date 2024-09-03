@@ -2,6 +2,7 @@
 dir_of_this_file="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 source $dir_of_this_file/generic.sh
 which python
+PYTHONPATH=$PYTHONPATH$:/data/home/yekai/github/mypro
 ###### the following are method-related variables ######
 alg_file_name="metacloak"
 round=final
@@ -11,7 +12,6 @@ INSTANCE_DIR_CHECK="$OUTPUT_DIR/noise-ckpt/${round}"
 if [ -z "$defense_sample_num" ]; then 
   defense_sample_num=1
 fi
-
 cd $ADB_PROJECT_ROOT/robust_facecloak
 # skip if noise exists 
 if [ ! -d "$INSTANCE_DIR_CHECK" ]; then 
