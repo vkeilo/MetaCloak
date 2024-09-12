@@ -20,6 +20,7 @@ from transformers import AutoTokenizer, PretrainedConfig
 
 
 def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: str, revision: str):
+    print(f'model_path:{pretrained_model_name_or_path}')
     text_encoder_config = PretrainedConfig.from_pretrained(
         pretrained_model_name_or_path,
         subfolder="text_encoder",

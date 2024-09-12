@@ -54,7 +54,8 @@ from torchvision import transforms
 from tqdm.auto import tqdm
 from transformers import AutoTokenizer, PretrainedConfig
 from robust_facecloak.generic.data_utils import jpeg_compress_image
-
+# vkeilo add it
+import wandb
 
 # Will error if the minimal version of diffusers is not installed. Remove at your own risks.
 check_min_version("0.13.0.dev0")
@@ -901,7 +902,10 @@ def main(args):
         disable=not accelerator.is_local_main_process,
     )
     progress_bar.set_description("Steps")
-
+    import wandb 
+    # wandb.init(project=args.wandb_project_name, entity=args.wandb_entity_name,name = args.wandb.run_name)
+    # wandb.config.update(args)
+    # wandb.log({'status': 'dreambooth training started'})
     for epoch in range(first_epoch, args.num_train_epochs):
         unet.train()
         if args.train_text_encoder:
@@ -970,8 +974,6 @@ def main(args):
                     loss = loss + args.prior_loss_weight * prior_loss
                 else:
                     loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
-                # vkeilo add it
-                wandb.log({"dreambooth train loss": loss.item()})
                 accelerator.backward(loss)
                 if accelerator.sync_gradients:
                     params_to_clip = (
@@ -1019,9 +1021,11 @@ def main(args):
             logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}
             progress_bar.set_postfix(**logs)
             accelerator.log(logs, step=global_step)
-
+                 
             if global_step >= args.max_train_steps:
                 break
+            # vkeilo add it
+            wandb.log({"dreambooth train loss": loss.detach().item()})  
 
     # Create the pipeline using using the trained modules and save it.
     accelerator.wait_for_everyone()
@@ -1108,5 +1112,5 @@ def main(args):
     
 if __name__ == "__main__":
     args = parse_args()
-    
+
     main(args)

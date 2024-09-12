@@ -70,6 +70,8 @@ command="""python3 train_dreambooth.py --clean_img_dir $CLEAN_INSTANCE_DIR --cle
 --use_8bit_adam \
 --log_score \
 --eval_gen_img_num=$eval_gen_img_num \
+--wandb_project_name $wandb_project_name \
+--wandb_run_name $wandb_run_name \
 --poison_rate 1.0
 """
 

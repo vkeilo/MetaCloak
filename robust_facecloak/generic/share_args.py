@@ -224,6 +224,22 @@ def share_parse_args():
         help="The wandb entity name."
     )
 
+    # vkeilo add it
+    # wandb run name
+    parser.add_argument(
+        "--wandb_run_name",
+        type=str,
+        default="test_run_name",
+    )
+
+    # vkeilo add it
+    # wandb run name
+    parser.add_argument(
+        "--wandb_project_name",
+        type=str,
+        default="metacloak_test",
+    )
+
     return parser
 
 
@@ -233,12 +249,12 @@ def add_train_db(parser):
         type=str,
         default=None,
         help="The path to the clean reference database.",)
-    parser.add_argument(
-        "--wandb_project_name", 
-        type=str,
-        default="metacloak",
-        help="The wandb project name."
-    )
+    # parser.add_argument(
+    #     "--wandb_project_name", 
+    #     type=str,
+    #     default="metacloak",
+    #     help="The wandb project name."
+    # )
     # parser.add_argument(
     #     "--wandb_entity_name", 
     #     type=str,

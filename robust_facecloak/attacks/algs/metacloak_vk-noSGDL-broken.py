@@ -257,7 +257,7 @@ def train_few_step(
 
 # 主要模型的加载
 def load_model(args, model_path):
-    print(f'out {model_path}')
+    print(model_path)
     # import correct text encoder class
     text_encoder_cls = import_model_class_from_model_name_or_path(model_path, args.revision)
 
@@ -526,36 +526,18 @@ def parse_args():
     )
     
     # # vkeilo add it
-    # # wandb run name
+    # # defender 每次更新参扰动的采样次数
     # parser.add_argument(
-    #     "--wandb_run_name",
-    #     type=str,
-    #     default="test_run_name",
+    #     "--step_sample_num",
+    #     type=int,
+    #     default=1,
     # )
-
-    # # vkeilo add it
-    # # wandb run name
-    # parser.add_argument(
-    #     "--wandb_project_name",
-    #     type=str,
-    #     default="metacloak_test",
-    # )
-
-    # vkeilo add it
-    # SGLD应用在哪里
-    parser.add_argument(
-        "--SGLD_method",
-        type=str,
-        default="allSGLD",
-    )
     
     args = parser.parse_args()
     return args
 
 # 核心处理流程
 def main(args):
-    # 确保SGLD方法参数合法
-    assert args.SGLD_method in ["allSGLD", "thetaSGLD", "deltaSGLD"]
     # 指定日志目录
     logging_dir = Path(args.output_dir, args.logging_dir)
     # Hugging Face加速器，指定混合精度训练模式和记录方式，默认为wandb
@@ -744,7 +726,6 @@ def main(args):
     )
 
     # 模型加载，本次实验只有一个
-    print(f'args model path:{args.pretrained_model_name_or_path}')
     model_paths = list(args.pretrained_model_name_or_path.split(","))
     num_models = len(model_paths)
 
@@ -859,11 +840,10 @@ def main(args):
                         perturbed_data,rubust_loss = defender.perturb(f, perturbed_data, original_data, vae, tokenizer, noise_scheduler,)
                         wandb.log({"defender_rubust_loss": rubust_loss})
                         # 此处引入随机梯度朗之万动力学
-                        if args.SGLD_method == 'allSGLD' or args.SGLD_method == 'deltaSGLD':
-                            perturbed_data = utils.SGLD(perturbed_data, args.sampling_step_delta, delta_noise_epsion).detach()
-                        mean_delta = args.beta_s * mean_delta + (1 - args.beta_s) * perturbed_data
+                        # perturbed_data = utils.SGLD(perturbed_data, args.sampling_step_delta, delta_noise_epsion).detach()
+                        # mean_delta = args.beta_s * mean_delta + (1 - args.beta_s) * perturbed_data
+                    # perturbed_data = mean_delta
                     mean_delta.detach()
-                    perturbed_data = mean_delta
                     # f[0] = f[0].to(device_0)
                     # f[1] = f[1].to(device_0)
                     # perturbed_data = defender.perturb(f, perturbed_data, original_data, vae, tokenizer, noise_scheduler)
@@ -881,59 +861,58 @@ def main(args):
                                     f[1].state_dict()]
                     
                     # print(f'start {args.sampling_times_theta} times of theta sampling')
-                    for k in range(args.sampling_times_theta):
-                        print(f'sample theta {k}/{args.sampling_times_theta} times')
-                        f = train_few_step(
-                            args,
-                            f,
-                            tokenizer,
-                            noise_scheduler,
-                            vae,
-                            perturbed_data.float(),
-                            args.advance_steps,
-                            # device = device_1
-                            dpcopy = False,
-                            task_loss_name='model_theta_loss',
-                        )
-                        torch.cuda.empty_cache()
-                        for model_index, model in enumerate(f):
-                            # print(f"\nbefore culcu, GPU: {gpu.name}, Free Memory: {gpu.memoryFree / 1024:.2f} GB")
-                            for name, p in model.named_parameters():
-                                # 先尝试固定学习率的（因为迭代次数暂未确定）
-                                # lr_now = lr_scheduler.get_last_lr()[0]
-                                # 参数采样,引入随机性
-                                if args.SGLD_method == 'allSGLD' or args.SGLD_method == 'thetaSGLD':
-                                    p.data = utils.SGLD(p.data, args.sampling_step_theta, theta_noise_epsion)
-                                # 模型参数也使用指数平均
-                                # mean_theta_list[model_index][name] = args.beta_s * mean_theta_list[model_index][name] + (1 - args.beta_s) * p.data.to('cpu')
-                                # mean_theta_list[model_index][name] = args.beta_s * mean_theta_list[model_index][name] + (1 - args.beta_s) * p.data
-                                mean_theta_list[model_index][name].mul_(args.beta_s).add_((1 - args.beta_s) * p.data)
-                            # print(f"\nafter calcu params, GPU: {gpu.name}, Free Memory: {gpu.memoryFree / 1024:.2f} GB")
-                            # torch.cuda.empty_cache()
-                    # lr_scheduler.step()
-                    # 对于模型的unet和文本编码器，分别更新参数
-                    for back_parameters, mean_theta in zip(back_parameters_list,mean_theta_list):
-                        for name in back_parameters:
-                            back_parameters[name] = args.beta_p * back_parameters[name] + (1 - args.beta_p) * mean_theta[name]
-                            # back_parameters[name] = back_parameters[name].float()
-                            # back_parameters[name].mul_(args.beta_p).add_((1 - args.beta_p) * mean_theta[name])
-                    for index, model in enumerate(f):
-                        # model.load_state_dict({k: v.to(device_g) for k, v in back_parameters_list[index].items()})
-                        model.load_state_dict(back_parameters_list[index])
-                        pass
-                    del back_parameters_list
-                    del mean_theta_list
-                    gc.collect()
-                    torch.cuda.empty_cache()
-                    # f = train_few_step(
-                    #     args,
-                    #     f,
-                    #     tokenizer,
-                    #     noise_scheduler,
-                    #     vae,
-                    #     perturbed_data.float(),
-                    #     args.advance_steps,
-                    # )
+                    # for k in range(args.sampling_times_theta):
+                    #     print(f'sample theta {k}/{args.sampling_times_theta} times')
+                    #     f = train_few_step(
+                    #         args,
+                    #         f,
+                    #         tokenizer,
+                    #         noise_scheduler,
+                    #         vae,
+                    #         perturbed_data.float(),
+                    #         args.advance_steps,
+                    #         # device = device_1
+                    #         dpcopy = False,
+                    #         task_loss_name='model_theta_loss',
+                    #     )
+                    #     torch.cuda.empty_cache()
+                    #     for model_index, model in enumerate(f):
+                    #         # print(f"\nbefore culcu, GPU: {gpu.name}, Free Memory: {gpu.memoryFree / 1024:.2f} GB")
+                    #         for name, p in model.named_parameters():
+                    #             # 先尝试固定学习率的（因为迭代次数暂未确定）
+                    #             # lr_now = lr_scheduler.get_last_lr()[0]
+                    #             # 参数采样,引入随机性
+                    #             # p.data = utils.SGLD(p.data, args.sampling_step_theta, theta_noise_epsion)
+                    #             # 模型参数也使用指数平均
+                    #             # mean_theta_list[model_index][name] = args.beta_s * mean_theta_list[model_index][name] + (1 - args.beta_s) * p.data.to('cpu')
+                    #             # mean_theta_list[model_index][name] = args.beta_s * mean_theta_list[model_index][name] + (1 - args.beta_s) * p.data
+                    #             mean_theta_list[model_index][name].mul_(args.beta_s).add_((1 - args.beta_s) * p.data)
+                    #         # print(f"\nafter calcu params, GPU: {gpu.name}, Free Memory: {gpu.memoryFree / 1024:.2f} GB")
+                    #         # torch.cuda.empty_cache()
+                    # # lr_scheduler.step()
+                    # # 对于模型的unet和文本编码器，分别更新参数
+                    # for back_parameters, mean_theta in zip(back_parameters_list,mean_theta_list):
+                    #     for name in back_parameters:
+                    #         back_parameters[name] = args.beta_p * back_parameters[name] + (1 - args.beta_p) * mean_theta[name]
+                    #         # back_parameters[name] = back_parameters[name].float()
+                    #         # back_parameters[name].mul_(args.beta_p).add_((1 - args.beta_p) * mean_theta[name])
+                    # for index, model in enumerate(f):
+                    #     # model.load_state_dict({k: v.to(device_g) for k, v in back_parameters_list[index].items()})
+                    #     model.load_state_dict(back_parameters_list[index])
+                    #     pass
+                    # del back_parameters_list
+                    # del mean_theta_list
+                    # gc.collect()
+                    # torch.cuda.empty_cache()
+                    f = train_few_step(
+                        args,
+                        f,
+                        tokenizer,
+                        noise_scheduler,
+                        vae,
+                        perturbed_data.float(),
+                        args.advance_steps,
+                    )
                     pbar.update(1)
                     # 每1000次扰动优化，保存一次扰动示例图像
                     if cnt % 1000 == 0:
@@ -962,7 +941,7 @@ def main(args):
 if __name__ == "__main__":
     # 获取脚本传参
     args = parse_args()
-    wandb.init(project=args.wandb_project_name, entity=args.wandb_entity_name, name=args.wandb_run_name)
+    wandb.init(project="metacloak", entity=args.wandb_entity_name)
     wandb.config.update(args)
     wandb.log({'status': 'gen'})
     # 核心代码

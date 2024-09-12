@@ -238,7 +238,7 @@ class RobustPGDAttacker():
                 print(f'\t\tdefender{_sample}/{self.sample_num} sample perturb')
                 # 模拟微调训练方对图像进行一定变换以缓解毒性
                 def_x_trans = self.transform(x).to(device, dtype=weight_dtype)
-                # 获得被进一步对抗扰动后的样本adv_x
+                # 获得被进一步对抗扰动后的样本adv_x，默认就是noattack
                 adv_x = self.attacker.perturb(
                     models, def_x_trans, self.transform(ori_x), vae, tokenizer, noise_scheduler, 
                 )
@@ -247,7 +247,7 @@ class RobustPGDAttacker():
                 loss_list.append(loss.item())
                 # 多次采样积累能够降低模型鲁棒性的梯度
                 loss.backward()
-            # 根据当前梯度信息更新x
+            # 根据当前积累的梯度信息更新x
             with torch.no_grad():
                 grad = x.grad.data
                 

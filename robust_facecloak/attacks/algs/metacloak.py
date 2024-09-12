@@ -379,7 +379,7 @@ def parse_args():
         type=int,
         default=60,
     )
-    # 记录间隔
+    # 记录间隔，展开数（提前训练步）——实验设置为1，其实就是没有使用
     parser.add_argument(
         "--unroll_steps",
         type=int,

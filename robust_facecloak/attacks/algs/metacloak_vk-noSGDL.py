@@ -257,7 +257,7 @@ def train_few_step(
 
 # 主要模型的加载
 def load_model(args, model_path):
-    print(f'out {model_path}')
+    print(model_path)
     # import correct text encoder class
     text_encoder_cls = import_model_class_from_model_name_or_path(model_path, args.revision)
 
@@ -526,36 +526,18 @@ def parse_args():
     )
     
     # # vkeilo add it
-    # # wandb run name
+    # # defender 每次更新参扰动的采样次数
     # parser.add_argument(
-    #     "--wandb_run_name",
-    #     type=str,
-    #     default="test_run_name",
+    #     "--step_sample_num",
+    #     type=int,
+    #     default=1,
     # )
-
-    # # vkeilo add it
-    # # wandb run name
-    # parser.add_argument(
-    #     "--wandb_project_name",
-    #     type=str,
-    #     default="metacloak_test",
-    # )
-
-    # vkeilo add it
-    # SGLD应用在哪里
-    parser.add_argument(
-        "--SGLD_method",
-        type=str,
-        default="allSGLD",
-    )
     
     args = parser.parse_args()
     return args
 
 # 核心处理流程
 def main(args):
-    # 确保SGLD方法参数合法
-    assert args.SGLD_method in ["allSGLD", "thetaSGLD", "deltaSGLD"]
     # 指定日志目录
     logging_dir = Path(args.output_dir, args.logging_dir)
     # Hugging Face加速器，指定混合精度训练模式和记录方式，默认为wandb
@@ -744,7 +726,6 @@ def main(args):
     )
 
     # 模型加载，本次实验只有一个
-    print(f'args model path:{args.pretrained_model_name_or_path}')
     model_paths = list(args.pretrained_model_name_or_path.split(","))
     num_models = len(model_paths)
 
@@ -859,8 +840,7 @@ def main(args):
                         perturbed_data,rubust_loss = defender.perturb(f, perturbed_data, original_data, vae, tokenizer, noise_scheduler,)
                         wandb.log({"defender_rubust_loss": rubust_loss})
                         # 此处引入随机梯度朗之万动力学
-                        if args.SGLD_method == 'allSGLD' or args.SGLD_method == 'deltaSGLD':
-                            perturbed_data = utils.SGLD(perturbed_data, args.sampling_step_delta, delta_noise_epsion).detach()
+                        # perturbed_data = utils.SGLD(perturbed_data, args.sampling_step_delta, delta_noise_epsion).detach()
                         mean_delta = args.beta_s * mean_delta + (1 - args.beta_s) * perturbed_data
                     mean_delta.detach()
                     perturbed_data = mean_delta
@@ -902,8 +882,7 @@ def main(args):
                                 # 先尝试固定学习率的（因为迭代次数暂未确定）
                                 # lr_now = lr_scheduler.get_last_lr()[0]
                                 # 参数采样,引入随机性
-                                if args.SGLD_method == 'allSGLD' or args.SGLD_method == 'thetaSGLD':
-                                    p.data = utils.SGLD(p.data, args.sampling_step_theta, theta_noise_epsion)
+                                # p.data = utils.SGLD(p.data, args.sampling_step_theta, theta_noise_epsion)
                                 # 模型参数也使用指数平均
                                 # mean_theta_list[model_index][name] = args.beta_s * mean_theta_list[model_index][name] + (1 - args.beta_s) * p.data.to('cpu')
                                 # mean_theta_list[model_index][name] = args.beta_s * mean_theta_list[model_index][name] + (1 - args.beta_s) * p.data
@@ -962,7 +941,7 @@ def main(args):
 if __name__ == "__main__":
     # 获取脚本传参
     args = parse_args()
-    wandb.init(project=args.wandb_project_name, entity=args.wandb_entity_name, name=args.wandb_run_name)
+    wandb.init(project="metacloak", entity=args.wandb_entity_name)
     wandb.config.update(args)
     wandb.log({'status': 'gen'})
     # 核心代码

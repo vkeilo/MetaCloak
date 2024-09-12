@@ -56,7 +56,10 @@ if [ ! -d "$INSTANCE_DIR_CHECK" ]; then
     --sampling_times_theta=$sampling_times_theta \
     --sampling_times_delta=$sampling_times_delta \
     --beta_s=0.3 \
-    --beta_p=0.3"""
+    --beta_p=0.3 \
+    --wandb_run_name=$wandb_run_name \
+    --wandb_project_name=$wandb_project_name \
+    --SGLD_method=$SGLD_method"""
     
     if [ "$train_mode" = "gau" ]; then
       command="$command --transform_gau --gau_kernel_size $gauK --transform_hflip "

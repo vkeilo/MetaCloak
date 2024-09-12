@@ -210,7 +210,7 @@ def FDSR_get_score(gen_i, clean_ref_db=None, model='retinaface', type_name="face
 FDSR_Scorer = ScoreEval(func_get_score_of_one_image=FDSR_get_score)
 
 def get_score(image_dir, clean_ref_dir=None, type_name="person", ):
-    
+    # 此处增加扰动图像的评估
     if type_name == "person":
         type_name = "face"
         
