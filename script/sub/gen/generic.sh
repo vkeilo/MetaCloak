@@ -4,7 +4,7 @@ export MODEL_PATH=$gen_model_path
 
 # source activate $ADB_ENV_NAME; 
 
-export WANDB_MODE=online
+export WANDB_MODE=offline
 export CLEAN_TRAIN_DIR="$ADB_PROJECT_ROOT/dataset/$dataset_name/${instance_name}/set_A" 
 
 export CLEAN_ADV_DIR="$ADB_PROJECT_ROOT/dataset/$dataset_name/${instance_name}/set_B"

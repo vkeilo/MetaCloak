@@ -21,6 +21,9 @@ def test_one_args(args):
 
 def update_finished_json(finished_log_json_path, run_name):
     finished_file = json.load(open(finished_log_json_path))
+    # if json is empty, add key finished_args_list and value []
+    if "finished_args_list" not in finished_file:
+        finished_file["finished_args_list"] = []
     finished_file["finished_args_list"].append(run_name)
     json.dump(finished_file, open(finished_log_json_path, "w"))
 

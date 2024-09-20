@@ -5,7 +5,7 @@ echo set up the model path
 export MODEL_PATH=$eval_model_path
 echo $MODEL_PATH
 
-export WANDB_MODE=online
+export WANDB_MODE=offline
 export CLEAN_REF="$ADB_PROJECT_ROOT/dataset/$dataset_name/${instance_name}/set_C"
 class_name=$(cat $ADB_PROJECT_ROOT/dataset/$dataset_name/${instance_name}/class.txt)
 # map class_name from face to person

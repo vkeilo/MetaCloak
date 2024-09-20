@@ -555,7 +555,7 @@ def parse_args():
 # 核心处理流程
 def main(args):
     # 确保SGLD方法参数合法
-    assert args.SGLD_method in ["allSGLD", "thetaSGLD", "deltaSGLD"]
+    assert args.SGLD_method in ["allSGLD", "thetaSGLD", "deltaSGLD" ,"noSGLD"]
     # 指定日志目录
     logging_dir = Path(args.output_dir, args.logging_dir)
     # Hugging Face加速器，指定混合精度训练模式和记录方式，默认为wandb
