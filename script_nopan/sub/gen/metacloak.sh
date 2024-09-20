@@ -1,9 +1,10 @@
 # source activate $ADB_ENV_NAME;
 dir_of_this_file="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 source $dir_of_this_file/generic.sh
+which python
 PYTHONPATH=$PYTHONPATH$:/data/home/yekai/github/mypro
 ###### the following are method-related variables ######
-alg_file_name="metacloak_vk"
+alg_file_name="metacloak"
 round=final
 INSTANCE_DIR_CHECK="$OUTPUT_DIR/noise-ckpt/${round}"
 
@@ -11,9 +12,7 @@ INSTANCE_DIR_CHECK="$OUTPUT_DIR/noise-ckpt/${round}"
 if [ -z "$defense_sample_num" ]; then 
   defense_sample_num=1
 fi
-
 cd $ADB_PROJECT_ROOT/robust_facecloak
-which python
 # skip if noise exists 
 if [ ! -d "$INSTANCE_DIR_CHECK" ]; then 
   {
@@ -46,30 +45,14 @@ if [ ! -d "$INSTANCE_DIR_CHECK" ]; then
     --learning_rate=5e-7 \
     --defense_pgd_radius=$r \
     --defense_pgd_step_size=$step_size \
-    --defense_pgd_step_num=$defense_pgd_step_num \
+    --defense_pgd_step_num=6 \
     --defense_sample_num=$defense_sample_num \
     --defense_pgd_ascending \
-    --attack_pgd_radius=$attack_pgd_radius \
+    --attack_pgd_radius=0 \
     --attack_pgd_step_size=1 \
-    --attack_pgd_step_num=$attack_pgd_step_num \
-    --mixed_precision=fp16 \
-    --sampling_times_theta=$sampling_times_theta \
-    --sampling_times_delta=$sampling_times_delta \
-    --beta_s=0.3 \
-    --beta_p=0.3 \
-    --wandb_run_name=$wandb_run_name \
-    --wandb_project_name=$wandb_project_name \
-    --SGLD_method=$SGLD_method \
-    --attack_mode=$attack_mode \
-    --pan_lambda_D=$pan_lambda_D \
-    --pan_lambda_S=$pan_lambda_S \
-    --pan_omiga=$pan_omiga \
-    --pan_k=$pan_k \
-    --pan_mode=$pan_mode \
-    --init_model_state_pool_pth_path=$init_model_state_pool_pth_path \
-    --pan_use_val=$pan_use_val \
-    """
-    
+    --attack_pgd_step_num=3 \
+    --mixed_precision=fp16"""
+    # 或者使用数据增强的数据
     if [ "$train_mode" = "gau" ]; then
       command="$command --transform_gau --gau_kernel_size $gauK --transform_hflip "
     fi

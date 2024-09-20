@@ -39,6 +39,7 @@ from robust_facecloak.generic.share_args import share_parse_args
 import utils
 import GPUtil
 import time
+import pickle
 
 logger = get_logger(__name__)
 
@@ -375,7 +376,7 @@ def parse_args():
     parser.add_argument(
         "--attack_pgd_step_size",
         type=int,
-        default=2,
+        default=1,
         help="The step size for attack pgd.",
     )
     # 攻击 PGD 的步数,就是一次扰动更新的采样次数
@@ -524,7 +525,72 @@ def parse_args():
         type=float,
         default=0.05,
     )
+
+    # vkeilo add it
+    # 攻击模式选择
+    parser.add_argument(
+        "--attack_mode",
+        type=str,
+        default='pdg',
+    )
+
+    # vkeilo add it
+    # PAN攻击的判别器lambda
+    parser.add_argument(
+        "--pan_lambda_D",
+        type=float,
+        default=0.0001,
+    )
+
+    # vkeilo add it
+    # PAN攻击的求解器lambda
+    parser.add_argument(
+        "--pan_lambda_S",
+        type=float,
+        default=0.05,
+    )
     
+    # vkeilo add it
+    # PAN攻击的omiga参数
+    parser.add_argument(
+        "--pan_omiga",
+        type=float,
+        default=0.5,
+    )
+
+    # vkeilo add it
+    # PAN攻击的k值
+    parser.add_argument(
+        "--pan_k",
+        type=int,
+        default=2,
+    )
+
+    # vkeilo add it
+    # PAN攻击解的来源（判别器或求解器）
+    parser.add_argument(
+        "--pan_mode",
+        type=str,
+        default='S',
+    )
+
+    # vkeilo add it
+    # 预训练过的扩散模型路径（init_model_state_pool）
+    parser.add_argument(
+        "--init_model_state_pool_pth_path",
+        type=str,
+        default=None,
+    )    
+    
+    # vkeilo add it
+    # PAN攻击轮次使用的最终结果（loss最小值还是最后值）
+    parser.add_argument(
+        "--pan_use_val",
+        type=str,
+        default='last',
+    )
+
+
     # # vkeilo add it
     # # wandb run name
     # parser.add_argument(
@@ -696,7 +762,8 @@ def main(args):
     
     
     from robust_facecloak.attacks.worker.robust_pgd_worker_vkecholoss import RobustPGDAttacker
-    from MetaCloak.robust_facecloak.attacks.worker.pgd_worker import PGDAttacker
+    from Metacloak_PAN.robust_facecloak.attacks.worker.pgd_worker import PGDAttacker
+    from Metacloak_PAN.robust_facecloak.attacks.worker.pan_worker import PANAttacker
     # 构建攻击者和防御者，攻击者使用PGD算法
     # attacker = PGDAttacker(
     #     radius=args.attack_pgd_radius, 
@@ -719,29 +786,47 @@ def main(args):
     #     sample_num=args.defense_sample_num,
     #     x_range=[0, 255],
     # )
-    attacker = PGDAttacker(
-        radius=args.attack_pgd_radius, 
-        steps=args.attack_pgd_step_num, 
-        step_size=args.attack_pgd_step_size,
-        random_start=args.attack_pgd_random_start,
-        ascending=args.attack_pgd_ascending,
-        args=args, 
-        x_range=[-1, 1],
-    )
-    defender = RobustPGDAttacker(
-        radius=args.defense_pgd_radius,
-        steps=args.defense_pgd_step_num, # 6
-        step_size=args.defense_pgd_step_size,
-        random_start=args.defense_pgd_random_start,
-        ascending=args.defense_pgd_ascending,
-        args=args,
-        attacker=attacker, 
-        trans=all_trans,
-        sample_num=args.defense_sample_num,
-        x_range=[0, 255],
-        # vkeilo add it
-        # step_sample_num=args.sampling_times_delta
-    )
+    assert args.attack_mode in ['pgd','pan']
+    if args.attack_mode == 'pgd':
+        attacker = PGDAttacker(
+            radius=args.attack_pgd_radius, 
+            steps=args.attack_pgd_step_num, 
+            step_size=args.attack_pgd_step_size,
+            random_start=args.attack_pgd_random_start,
+            ascending=args.attack_pgd_ascending,
+            args=args, 
+            x_range=[-1, 1],
+        )
+        defender = RobustPGDAttacker(
+            radius=args.defense_pgd_radius,
+            steps=args.defense_pgd_step_num, # 6
+            step_size=args.defense_pgd_step_size,
+            random_start=args.defense_pgd_random_start,
+            ascending=args.defense_pgd_ascending,
+            args=args,
+            attacker=attacker, 
+            trans=all_trans,
+            sample_num=args.defense_sample_num,
+            x_range=[0, 255],
+            # vkeilo add it
+            # step_sample_num=args.sampling_times_delta
+        )
+    else:
+        attacker = PANAttacker(
+            radius=args.attack_pgd_radius,
+            steps=args.attack_pgd_step_num,
+            step_size=args.attack_pgd_step_size,
+            # ascending=args.defense_pgd_ascending,
+            args=args,
+            # trans=all_trans,
+            # sample_num=args.defense_sample_num,
+            x_range=[0, 255],
+            lambda_D = args.pan_lambda_D,
+            lambda_S = args.pan_lambda_S,
+            k = args.pan_k,
+            mode = args.pan_mode,
+            use_val = args.pan_use_val,
+        )
 
     # 模型加载，本次实验只有一个
     print(f'args model path:{args.pretrained_model_name_or_path}')
@@ -790,21 +875,27 @@ def main(args):
         f_ori = [unet, text_encoder]
         # 得到训练total_train_steps步之后的unet, text_encoder参数以及中间状态参数
         # print('start train few 702')
-        f_ori, step2state_dict = train_few_step(
-                args,
-                f_ori,
-                tokenizer,
-                noise_scheduler,
-                vae,
-                perturbed_data.float(),
-                args.total_train_steps,
-                step_wise_save=True,
-                save_step=args.interval,
-                task_loss_name="ori_model_train_loss",
-        )  
-        # init_model_state_pool就来保存训练中间状态参数
-        init_model_state_pool[j] = step2state_dict
-
+        if args.init_model_state_pool_pth_path is None:
+            f_ori, step2state_dict = train_few_step(
+                    args,
+                    f_ori,
+                    tokenizer,
+                    noise_scheduler,
+                    vae,
+                    perturbed_data.float(),
+                    args.total_train_steps,
+                    step_wise_save=True,
+                    save_step=args.interval,
+                    task_loss_name="ori_model_train_loss",
+            )  
+            # init_model_state_pool就来保存训练中间状态参数
+            init_model_state_pool[j] = step2state_dict
+        else:
+            pre_trained_pth_path = args.init_model_state_pool_pth_path.split(',')[j]
+            print(f'model {j} use trained pth:{pre_trained_pth_path}')
+            with open(pre_trained_pth_path, 'rb') as f:
+                model_pth_dict = pickle.load(f)
+                init_model_state_pool[j] = model_pth_dict[0]
         # 释放占用的资源
         del f_ori, unet, text_encoder, tokenizer, noise_scheduler, vae
         import gc
@@ -827,11 +918,6 @@ def main(args):
     # 在多个模型集合上进行扰动优化
     # 多次实验
     # total_iterations = args.epochs * len(train_dataloader)
-
-    gpus = GPUtil.getGPUs()
-    gpu = gpus[1]
-    device_0 = torch.device('cuda:0')
-    device_1 = torch.device('cuda:1')
 
     for _ in range(args.total_trail_num):
         # 针对每一个模型
@@ -856,8 +942,11 @@ def main(args):
                     print(f'start {args.sampling_times_delta} times of delta sampling ')
                     for k in range(args.sampling_times_delta):
                         print(f'sample delta {k}/{args.sampling_times_delta} times')
-                        perturbed_data,rubust_loss = defender.perturb(f, perturbed_data, original_data, vae, tokenizer, noise_scheduler,)
-                        wandb.log({"defender_rubust_loss": rubust_loss})
+                        if args.attack_mode == "pgd":
+                            perturbed_data,rubust_loss = defender.perturb(f, perturbed_data, original_data, vae, tokenizer, noise_scheduler,)
+                        elif args.attack_mode == "pan":
+                            perturbed_data,rubust_loss = attacker.attack(f, perturbed_data, original_data, vae, tokenizer, noise_scheduler,)
+                        wandb.log({"perturbedloss": rubust_loss})
                         # 此处引入随机梯度朗之万动力学
                         if args.SGLD_method == 'allSGLD' or args.SGLD_method == 'deltaSGLD':
                             perturbed_data = utils.SGLD(perturbed_data, args.sampling_step_delta, delta_noise_epsion).detach()
@@ -871,9 +960,6 @@ def main(args):
                     # 扰动优化次数更新 +1
                     cnt+=1
                     # 在新的扰动数据下，训练advance_steps步，后续需要在此处引入随机性（多轮采样优化参数），并以参数的平均值作为模型的参数
-                    # vkeilo add it
-                    # print(f"\nbefore back params, GPU: {gpu.name}, Free Memory: {gpu.memoryFree / 1024:.2f} GB")
-
                     back_parameters_list = [f[0].state_dict(),
                                             f[1].state_dict()]
 

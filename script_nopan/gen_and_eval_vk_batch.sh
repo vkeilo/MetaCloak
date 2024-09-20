@@ -1,6 +1,6 @@
 #### Variables that you should set before running the script
 # setting the GPU id
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=0
 # for logging , please set your own wandb entity name
 export wandb_entity_name=vkeilo
 # export wandb_project_name="metacloak_test1"
@@ -40,11 +40,7 @@ export model_name=$gen_model_name
 pwdd=$(cd "$(dirname "$0")";pwd)
 cd $pwdd 
 . ./methods_config_vk_batch.sh
-# if [ $attack_mode == "pgd" ]; then
-#     export wandb_run_name="MAT-${total_train_steps}-${interval}-${sampling_times_delta}-${sampling_times_theta}-x${defense_pgd_step_num}x${attack_pgd_step_num}-radius${r}-${SGLD_method}-robust${attack_pgd_radius}-${test_timestamp}"
-# elif [ $attack_mode == "pan" ]; then
-#     export wandb_run_name="MAT-PAN-${total_train_steps}-${interval}-${sampling_times_delta}-${sampling_times_theta}-x${defense_pgd_step_num}x${attack_pgd_step_num}-radius${r}-${SGLD_method}-robust${attack_pgd_radius}-${pan_lambda_S}-${pan_lambda_D}-${pan_omiga}-k=${pan_k}-use${pan_mode}-${pan_use_val}-${test_timestamp}"
-
+export wandb_run_name="MAT-${total_train_steps}-${interval}-${sampling_times_delta}-${sampling_times_theta}-x${defense_pgd_step_num}x${attack_pgd_step_num}-radius${r}-${SGLD_method}-robust${attack_pgd_radius}-${test_timestamp}"
 export step_size=$(echo "scale=2; $r/10" | bc); 
 export gen_exp_name_prefix=$prefix_name_gen
 export prefix_name_train=$prefix_name_train
@@ -59,8 +55,6 @@ export INSTANCE_DIR_CHECK=$INSTANCE_DIR
 # vkeilo add it
 export PYTHONPATH=$ADB_PROJECT_ROOT:$PYTHONPATH
 
-
-echo "PYTHONPATH:${PYTHONPATH}"
 # generate the noise 
 bash ./sub/gen/$gen_file_name
 

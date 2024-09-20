@@ -8,19 +8,13 @@ def test_one_args(args):
     # os.chdir("..")
     # bash run : nohup bash script/gen_and_eval_vk.sh > output_MAT-1000-200-6-6-x1x1-radius11-allSGLD-rubust0.log 2>&1
     os.environ["test_timestamp"] = str(int(time.time()))
-    if os.getenv('attack_mode') == "pgd":
-        os.environ["wandb_run_name"] = f"MAT-{os.getenv('total_train_steps')}-{os.getenv('interval')}-{os.getenv('sampling_times_delta')}-{os.getenv('sampling_times_theta')}-x{os.getenv('defense_pgd_step_num')}x{os.getenv('attack_pgd_step_num')}-radius{os.getenv('r')}-{os.getenv('SGLD_method')}-robust{os.getenv('attack_pgd_radius')}-{os.getenv('test_timestamp')}"
-    elif os.getenv('attack_mode') == "pan":
-        os.environ["wandb_run_name"] = f"MAT-PAN-{os.getenv('total_train_steps')}-{os.getenv('interval')}-{os.getenv('sampling_times_delta')}-{os.getenv('sampling_times_theta')}-x{os.getenv('defense_pgd_step_num')}x{os.getenv('attack_pgd_step_num')}-radius{os.getenv('r')}-{os.getenv('SGLD_method')}-robust{os.getenv('attack_pgd_radius')}-{os.getenv('pan_lambda_S')}-{os.getenv('pan_lambda_D')}-{os.getenv('pan_omiga')}-k={os.getenv('pan_k')}-use{os.getenv('pan_mode')}-{os.getenv('pan_use_val')}-{os.getenv('test_timestamp')}"
+    os.environ["wandb_run_name"] = f"MAT-{os.getenv('total_train_steps')}-{os.getenv('interval')}-{os.getenv('sampling_times_delta')}-{os.getenv('sampling_times_theta')}-x{os.getenv('defense_pgd_step_num')}x{os.getenv('attack_pgd_step_num')}-radius{os.getenv('r')}-{os.getenv('SGLD_method')}-robust{os.getenv('attack_pgd_radius')}-{os.getenv('test_timestamp')}"
     # python 实现 export test_timestamp=$(date +%s)
     run_name = os.getenv("wandb_run_name")
     print(f"run_name: {run_name}")
     os.system(f"nohup bash script/gen_and_eval_vk_batch.sh > output_{run_name}.log 2>&1")
     check_file_for_pattern(f"output_{run_name}.log","find function last")
     # rename dir exp_data to exp_data_{run_name}
-    # check dir exp_datas_output exist
-    if not os.path.exists("exp_datas_output"):
-        os.mkdir("exp_datas_output")
     os.system(f"mv exp_data exp_datas_output/exp_data_{run_name}")
     os.system(f"mv output_{run_name}.log logs_output/output_{run_name}.log")
     return run_name
@@ -59,7 +53,6 @@ def check_file_for_pattern(file_path, pattern="find function last"):
         time.sleep(180)
 
 if __name__ == "__main__":
-    print("batch test start...")
     untest_args_json_path  = "run_in_batch/untest.json"
     finished_log_json_path = "run_in_batch/finished.json"
     untest_file_con = json.load(open(untest_args_json_path))
