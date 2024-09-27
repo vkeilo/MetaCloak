@@ -2,7 +2,7 @@ import os
 import json
 import time
 
-def test_one_args(args):
+def test_one_args(args,test_lable):
     for k,v in args.items():
         os.environ[k] = str(v)
     # os.chdir("..")
@@ -21,8 +21,14 @@ def test_one_args(args):
     # check dir exp_datas_output exist
     if not os.path.exists("exp_datas_output"):
         os.mkdir("exp_datas_output")
-    os.system(f"mv exp_data exp_datas_output/exp_data_{run_name}")
-    os.system(f"mv output_{run_name}.log logs_output/output_{run_name}.log")
+    if not os.path.exists(f"exp_datas_output/{test_lable}"):
+        os.mkdir(f"exp_datas_output/{test_lable}")
+    if not os.path.exists("logs_output"):
+        os.mkdir("logs_output")
+    if not os.path.exists(f"logs_output/{test_lable}"):
+        os.mkdir(f"logs_output/{test_lable}")
+    os.system(f"mv exp_data exp_datas_output/{test_lable}/exp_data_{run_name}")
+    os.system(f"mv output_{run_name}.log logs_output/{test_lable}/output_{run_name}.log")
     return run_name
 
 def update_finished_json(finished_log_json_path, run_name):
@@ -64,9 +70,10 @@ if __name__ == "__main__":
     finished_log_json_path = "run_in_batch/finished.json"
     untest_file_con = json.load(open(untest_args_json_path))
     untest_args_list = untest_file_con["untest_args_list"].copy()
+    test_lable = untest_file_con["test_lable"]
     for args in untest_args_list:
         print(f"start run :{args}")
-        finished_name = test_one_args(args)
+        finished_name = test_one_args(args,test_lable)
         print(f"finished run :{finished_name}")
         update_untest_json(untest_args_json_path)
         update_finished_json(finished_log_json_path, finished_name)

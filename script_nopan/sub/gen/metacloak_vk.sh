@@ -17,7 +17,7 @@ which python
 # skip if noise exists 
 if [ ! -d "$INSTANCE_DIR_CHECK" ]; then 
   {
-    command="""python3 attacks/algs/$alg_file_name.py --instance_name $instance_name --dataset_name $dataset_name \
+    command="""python attacks/algs/$alg_file_name.py --instance_name $instance_name --dataset_name $dataset_name \
     --total_train_steps $total_train_steps \
     --wandb_entity_name $wandb_entity_name \
     --seed $seed \

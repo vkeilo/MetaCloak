@@ -32,6 +32,7 @@ params_options = {
     "advance_steps": [2],
     "total_trail_num": [2],
     "interval": [20],
+    "dream_boothtraining_steps": [1000],
     "total_train_steps": [100],
     "unroll_steps": [1],
     "defense_sample_num": [1],

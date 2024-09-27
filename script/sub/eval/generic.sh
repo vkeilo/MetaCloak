@@ -1,5 +1,5 @@
 
-export max_train_steps=1000
+export max_train_steps=$dreambooth_training_steps
 export lr=5e-7
 echo set up the model path
 export MODEL_PATH=$eval_model_path
@@ -41,7 +41,7 @@ fi
 
 echo "start dreambooth training"
 
-command="""python3 train_dreambooth.py --clean_img_dir $CLEAN_INSTANCE_DIR --clean_ref_db $CLEAN_REF  --instance_name $instance_name --dataset_name $dataset_name --class_name '$class_name' \
+command="""python train_dreambooth.py --clean_img_dir $CLEAN_INSTANCE_DIR --clean_ref_db $CLEAN_REF  --instance_name $instance_name --dataset_name $dataset_name --class_name '$class_name' \
 --wandb_entity_name $wandb_entity_name \
 --seed $seed \
 --train_text_encoder \
