@@ -3,20 +3,21 @@
     "untest_args_list":[
         {
             "wandb_project_name":"metacloak_PAN_test",
+            "model_select_mode": "min_loss",
             "advance_steps": 2,
             "total_trail_num": 4,
-            "interval": 2, 
-            "dream_boothtraining_steps": 10,
-            "total_train_steps": 10,  
+            "interval": 200, 
+            "total_train_steps": 1000,  
+            "dreambooth_training_steps": 1000,
             "unroll_steps": 1,  
             "defense_sample_num": 1,  
             "defense_pgd_step_num": 1,  
-            "sampling_times_delta": 2,
-            "sampling_times_theta": 2,
-            "attack_pgd_step_num": 3,  
+            "sampling_times_delta": 1,
+            "sampling_times_theta": 1,
+            "attack_pgd_step_num": 1,  
             "attack_pgd_radius": 0,  
             "r":11,
-            "SGLD_method": "deltaSGLD",
+            "SGLD_method": "noSGLD",
             "gauK":7,
             "eval_gen_img_num":16,
             "attack_mode": "pan",
@@ -24,9 +25,10 @@
             "pan_lambda_S": 0.05,
             "pan_omiga": 0.5,
             "pan_k": 2,
-            "pan_mode": "D",
-            "init_model_state_pool_pth_path": "/data/home/yekai/github/mypro/Metacloak_PAN/robust_facecloak/attacks/algs/tmpdata/init_model_state_pool.pth",
-            "pan_use_val": "last"
+            "pan_mode": "S",
+            "init_model_state_pool_pth_path": "/data/home/yekai/github/mypro/MetaCloak/robust_facecloak/attacks/algs/tmpdata/init_model_state_pool_sd2-1.pth,/data/home/yekai/github/mypro/MetaCloak/robust_facecloak/attacks/algs/tmpdata/init_model_state_pool_sd1-5.pth",
+            "pan_use_val": "last",
+            "total_gan_step":"min_loss"
         }
     ]
 
