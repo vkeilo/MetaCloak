@@ -9,9 +9,9 @@ export seed=0
 # for other models, change the name and path correspondingly
 # SD21, SD21base, SD15, SD14
 export gen_model_name=SD21base # the model to generate the noise 
-export MODEL_ROOT=$ADB_PROJECT_ROOT
+# export MODEL_ROOT=$ADB_PROJECT_ROOT
 # export gen_model_path=$MODEL_ROOT/SD/stable-diffusion-2-1-base,$MODEL_ROOT/SD/stable-diffusion-2-1-base
-export gen_model_path="${MODEL_ROOT}/SD/stable-diffusion-2-1-base,${MODEL_ROOT}/SD/stable-diffusion-v1-5"
+# export gen_model_path="${MODEL_ROOT}/SD/stable-diffusion-2-1-base,${MODEL_ROOT}/SD/stable-diffusion-v1-5"
 # echo $gen_model_path
 export eval_model_name=SD21base # the model that performs the evaluation on noise 
 export eval_model_path=$MODEL_ROOT/SD/stable-diffusion-2-1-base

@@ -167,62 +167,6 @@ def train_few_step(
             target = noise_scheduler.get_velocity(latents, noise, timesteps)
         else:
             raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
-        # vkeilo add it
-        # theta_noise_epsion = args.sampling_step_theta * args.sampling_noise_ratio
-        # back_parameters_unet = unet.state_dict()
-        # mean_theta_unet = unet.state_dict()
-        # back_parameters_textencoder = text_encoder.state_dict()
-        # mean_theta_textencoder = text_encoder.state_dict()
-        # for _sample in range(args.sampling_times_theta):
-        #     # with prior preservation loss
-        #     # 可选是否使用先验保留损失
-        #     optimizer.zero_grad()
-
-        #     if args.with_prior_preservation:
-        #         # 再次分为一半一半，对应之前的stack操作
-        #         print('model_pred shape before chunk', model_pred.shape)
-        #         model_pred, model_pred_prior = torch.chunk(model_pred, 2, dim=0)
-        #         target, target_prior = torch.chunk(target, 2, dim=0)
-
-        #         # Compute instance loss
-        #         instance_loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
-
-        #         # Compute prior loss  确保在原来类别上的生成能力不丢失
-        #         prior_loss = F.mse_loss(model_pred_prior.float(), target_prior.float(), reduction="mean")
-
-        #         # Add the prior loss to the instance loss.
-        #         loss = instance_loss + args.prior_loss_weight * prior_loss
-
-        #     else:
-        #         # 不使用先验保留损失
-        #         loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
-        #     # 反向传播
-        #     loss.backward(retain_graph=retain_graph)
-        #     # 梯度裁剪
-        #     torch.nn.utils.clip_grad_norm_(params_to_optimize, 1.0, error_if_nonfinite=True)
-        #     # 参数优化
-        #     optimizer.step()
-        #     # optimizer.zero_grad()
-        #     for name, p in unet.named_parameters():
-        #         # lr_now = lr_scheduler.get_last_lr()[0]
-        #         lr_now = 1e-4
-        #         # 参数采样
-        #         p.data = utils.SGLD(p.data, lr_now, theta_noise_epsion)
-        #         # 模型参数也使用指数平均
-        #         mean_theta_unet[name] = args.beta_s * mean_theta_unet[name] + (1 - args.beta_s) * p.data
-        #     for name, p in text_encoder.named_parameters():
-        #         # lr_now = lr_scheduler.get_last_lr()[0]
-        #         lr_now = 1e-4
-        #         # 参数采样
-        #         p.data = utils.SGLD(p.data, lr_now, theta_noise_epsion)
-        #         # 模型参数也使用指数平均
-        #         mean_theta_textencoder[name] = args.beta_s * mean_theta_textencoder[name] + (1 - args.beta_s) * p.data
-        # for name in back_parameters_unet:
-        #     back_parameters_unet[name] = args.beta_p * back_parameters_unet[name] + (1 - args.beta_p) * mean_theta_unet[name]
-        # for name in back_parameters_textencoder:
-        #     back_parameters_textencoder[name] = args.beta_p * back_parameters_textencoder[name] + (1 - args.beta_p) * mean_theta_textencoder[name]
-        # unet.load_state_dict(back_parameters_unet)
-        # text_encoder.load_state_dict(back_parameters_textencoder)
 
         if args.with_prior_preservation:
             # 再次分为一半一半，对应之前的stack操作
@@ -605,6 +549,14 @@ def parse_args():
         default='order',
     )
 
+    # vkeilo add it
+    # 如果采用动态模型选择，训练迭代的次数
+    parser.add_argument(
+        "--total_gan_step",
+        type=int,
+        default=0,
+    )
+
 
 
     # # vkeilo add it
@@ -778,8 +730,8 @@ def main(args):
     
     
     from robust_facecloak.attacks.worker.robust_pgd_worker_vkecholoss import RobustPGDAttacker
-    from Metacloak_PAN.robust_facecloak.attacks.worker.pgd_worker import PGDAttacker
-    from Metacloak_PAN.robust_facecloak.attacks.worker.pan_worker import PANAttacker
+    from MetaCloak.robust_facecloak.attacks.worker.pgd_worker import PGDAttacker
+    from MetaCloak.robust_facecloak.attacks.worker.pan_worker import PANAttacker
     # 构建攻击者和防御者，攻击者使用PGD算法
     # attacker = PGDAttacker(
     #     radius=args.attack_pgd_radius, 
@@ -829,9 +781,9 @@ def main(args):
         )
     else:
         attacker = PANAttacker(
-            radius=args.attack_pgd_radius,
-            steps=args.attack_pgd_step_num,
-            step_size=args.attack_pgd_step_size,
+            radius=args.defense_pgd_radius,
+            steps=args.defense_pgd_step_num,
+            step_size=args.defense_pgd_step_size,
             # ascending=args.defense_pgd_ascending,
             args=args,
             # trans=all_trans,
@@ -924,7 +876,11 @@ def main(args):
     print(steps_list)
     # 进度条，总train_few_step调用的次数*模型数量1*
     pbar = tqdm(total=args.total_trail_num * num_models * (args.interval // args.advance_steps) * len(steps_list), desc="meta poison with model ensemble")
-    total_gan_step = args.total_trail_num * num_models * (args.interval // args.advance_steps) * len(steps_list)
+
+    if args.total_gan_step == 0:
+        total_gan_step = args.total_trail_num * num_models * (args.interval // args.advance_steps) * len(steps_list)
+    else:
+        total_gan_step = args.total_gan_step
     cnt=0
     # vkeilo add it  确定噪声强度
     theta_noise_epsion = args.sampling_step_theta * args.sampling_noise_ratio
@@ -947,6 +903,7 @@ def main(args):
     # model_state_num = steps_list*len(num_models)
     assert args.model_select_mode in ['order','min_loss']
     print(f"avalaible model num: {num_models},available steps: {str(steps_list)},total train step :{str(args.total_train_steps)}")
+    # 如果是平均顺序选择模型池中的模型
     if args.model_select_mode == 'order':
         for _ in range(args.total_trail_num):          
             # 针对每一个模型
@@ -983,6 +940,7 @@ def main(args):
                             mean_delta = args.beta_s * mean_delta + (1 - args.beta_s) * perturbed_data
                         mean_delta.detach()
                         perturbed_data = mean_delta
+                        print(f"max pixel change:{find_max_pixel_change(perturbed_data, original_data)}")
                         # f[0] = f[0].to(device_0)
                         # f[1] = f[1].to(device_0)
                         # perturbed_data = defender.perturb(f, perturbed_data, original_data, vae, tokenizer, noise_scheduler)
@@ -997,7 +955,6 @@ def main(args):
                                         f[1].state_dict()]
                         
                         # print(f'start {args.sampling_times_theta} times of theta sampling')
-                        tmp_model_loss
                         for k in range(args.sampling_times_theta):
                             print(f'sample theta {k}/{args.sampling_times_theta} times')
                             f = train_few_step(
@@ -1071,6 +1028,7 @@ def main(args):
             import gc
             gc.collect()
             torch.cuda.empty_cache()      
+    # 如果根据当前模型表现动态选择模型
     elif args.model_select_mode == "min_loss":
         loss_log = [{split_step:[0]*args.sampling_times_theta for split_step in steps_list} for _ in range(num_models)]
         
@@ -1207,10 +1165,19 @@ def main(args):
     # 保存最后的结果
     save_image(perturbed_data, "final")
 
+    print(f"max pixel change:{find_max_pixel_change(perturbed_data, original_data)}")
 
+def find_max_pixel_change(original_img, noisy_img):
+    diff = torch.abs(original_img - noisy_img)
+    
+    # Find the maximum pixel difference
+    max_change = torch.max(diff)
+    
+    return max_change.item()
 if __name__ == "__main__":
     # 获取脚本传参
     args = parse_args()
+    print(args)
     wandb.init(project=args.wandb_project_name, entity=args.wandb_entity_name, name=args.wandb_run_name)
     wandb.config.update(args)
     wandb.log({'status': 'gen'})

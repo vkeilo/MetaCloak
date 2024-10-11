@@ -70,8 +70,8 @@ class PANAttacker():
             print(f'epoch: {i}, loss_S: {loss_S:.4f}, loss_D: {loss_D: .4f}')
             if loss_S < best_loss_S:
                 best_loss_S = loss_S
-                # if mode == "S":
-                    # print(f"find a better pertubation , max val is {self.get_Linfty_norm(pertubations_S.to('cpu') + perturbed_data.to('cpu') - ori_image.to('cpu'))}")
+                # if self.mode == "S":
+                    # print(f"find a better pertubation , max val is {self.get_Linfty_norm(pertubation_data_S.to('cpu') - ori_image.to('cpu'))}")
                 best_pertubation_data_S = deepcopy(pertubation_data_S)
         
         assert self.mode in ["S", "D"]
@@ -84,7 +84,7 @@ class PANAttacker():
             use_pertubation_data = pertubation_data_D if self.use_val == "last" else best_pertubation_data_D
             loss = loss_D if self.use_val == "last" else best_loss_D
         
-        # print(f"find a better pertubation_{mode} , max val is {self.get_Linfty_norm(use_pertubations)}")
+        # print(f"find a better pertubation_{self.mode} , max val is {self.get_Linfty_norm(use_pertubations)}")
         # print(f"use_per is :{use_pertubations[2]}")
         return use_pertubation_data.cpu(), loss
 
@@ -143,15 +143,17 @@ class PANAttacker():
 
         loss_P = self.certi(f, adv_image, vae, noise_scheduler, input_ids, weight_dtype=self.weight_dtype)
         # 取最大是否合适
-        pertubation_linf = torch.max(self.get_Linfty_norm(adv_image-ori_image))
-        loss = - loss_P + (self.lambda_D * torch.abs(pertubation_linf)**self.k)
-        return loss
+        # pertubation_linf = torch.max(self.get_Linfty_norm(adv_image-ori_image))
+        # loss = - loss_P + (self.lambda_D * torch.abs(pertubation_linf)**self.k)
+        return - loss_P
 
     def update_pertubation_data_D(self, f, adv_image, ori_image, vae, tokenizer, noise_scheduler):
         adv_image.requires_grad = True
         loss = self.get_loss_D(f, adv_image, ori_image, vae, tokenizer, noise_scheduler)
         loss.backward()
+        # print(f"loss D : {loss}")
         grad_ml_alpha = self.alpha * adv_image.grad.sign()
+        # print(f"D:adv_image.grad.sign(): {adv_image.grad.sign()}")
         adv_image_new = adv_image - grad_ml_alpha
         adv_image_new = self._clip_(adv_image_new, ori_image, mode = "D")
         adv_image_new = adv_image_new.detach()
@@ -175,15 +177,16 @@ class PANAttacker():
         loss_P_S = self.certi(f, adv_image_S, vae, noise_scheduler, input_ids, weight_dtype=self.weight_dtype)
         loss_P_D = self.certi(f, adv_image_D, vae, noise_scheduler, input_ids, weight_dtype=self.weight_dtype)
 
+        # 
         pertubation_linf_S = torch.max(self.get_Linfty_norm(adv_image_S-ori_image))
         loss = - loss_P_S + self.lambda_S * (torch.abs(pertubation_linf_S)**self.k) + self.omiga * (torch.abs(loss_P_S - loss_P_D)**self.k)
         loss.backward()
-
+        # print("Gradient of adv_image_S:", adv_image_S.grad)
         # print(f'grad:{self.alpha * pertubation_S.grad.sign()[0]}')
         # print(f'now pertubation_S: {pertubation_S[0]}')
         grad_ml_alpha = self.alpha * adv_image_S.grad.sign()
         # print(f'old pertubation_S: {pertubation_S[2]}')
-        # print(f' grad_ml_alpha: {grad_ml_alpha[2]}')
+        # print(f' adv_image_S.grad.sign(): {adv_image_S.grad.sign()}')
         adv_image_S_new = adv_image_S - grad_ml_alpha
         # print(f'inner:{self.get_Linfty_norm(adv_image_S - grad_ml_alpha-ori_image)}')
         # 裁剪到0～255之间,并确保扰动没有超出范围
@@ -192,6 +195,7 @@ class PANAttacker():
         adv_image_S_new = adv_image_S_new.detach()
         # print(f'new pertubation_S: {pertubation_S[2]}')
         torch.cuda.empty_cache()
+        # print(f"new per max val is {self.get_Linfty_norm(adv_image_S_new.to('cpu') - ori_image.to('cpu'))}")
         return adv_image_S_new, loss.item()
 
     def get_Linfty_norm(self, images):

@@ -52,7 +52,7 @@ if [ ! -d "$INSTANCE_DIR_CHECK" ]; then
     --attack_pgd_radius=$attack_pgd_radius \
     --attack_pgd_step_size=1 \
     --attack_pgd_step_num=$attack_pgd_step_num \
-    --mixed_precision=fp16 \
+    --mixed_precision=$mixed_precision \
     --sampling_times_theta=$sampling_times_theta \
     --sampling_times_delta=$sampling_times_delta \
     --beta_s=0.3 \

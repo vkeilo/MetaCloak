@@ -1,10 +1,29 @@
 import os
 import json
 import time
+import re
+
+def set_env_with_expansion(key, value):
+    """
+    将环境变量值中的 ${VAR_NAME} 替换为对应的环境变量值，并设置新的环境变量。
+    
+    :param key: 要设置的环境变量名称
+    :param value: 包含 ${VAR_NAME} 的字符串，表示需要解析的环境变量值
+    """
+    # 使用正则表达式找到 ${VAR_NAME} 并替换为对应的环境变量值
+    pattern = re.compile(r'\$\{([^}]+)\}')
+    expanded_value = pattern.sub(lambda match: os.getenv(match.group(1), match.group(0)), value)
+    
+    # 设置环境变量
+    os.environ[key] = expanded_value
+    print(f"Environment variable '{key}' set to: {expanded_value}")
 
 def test_one_args(args,test_lable):
     for k,v in args.items():
-        os.environ[k] = str(v)
+        if "$" in str(v):
+            set_env_with_expansion(k,v)
+        else:
+            os.environ[k] = str(v)
     # os.chdir("..")
     # bash run : nohup bash script/gen_and_eval_vk.sh > output_MAT-1000-200-6-6-x1x1-radius11-allSGLD-rubust0.log 2>&1
     os.environ["test_timestamp"] = str(int(time.time()))
@@ -66,6 +85,10 @@ def check_file_for_pattern(file_path, pattern="find function last"):
 
 if __name__ == "__main__":
     print("batch test start...")
+    # run in dir MetaCloak
+    ADB_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    os.environ["ADB_PROJECT_ROOT"] = ADB_path
+    os.environ["PYTHONPATH"] = str(os.getenv("PYTHONPATH")) + ":" + ADB_path
     untest_args_json_path  = "run_in_batch/untest.json"
     finished_log_json_path = "run_in_batch/finished.json"
     untest_file_con = json.load(open(untest_args_json_path))
