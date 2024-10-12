@@ -39,10 +39,10 @@ params_options = {
     "wandb_project_name": ["metacloak_PAN"],
     "mixed_precision": ["bf16"],
     "advance_steps": [2],
-    "total_trail_num": [2],
+    "total_trail_num": [4],
+    "total_train_steps": [100],
     "interval": [20],
-    "dreambooth_training_steps": [100],
-    "total_train_steps": [1000],
+    "dreambooth_training_steps": [1000],
     "unroll_steps": [1],
     "defense_sample_num": [1],
     "defense_pgd_step_num": [1,3,9],
@@ -64,7 +64,7 @@ params_options = {
 }
 
 # Number of times to repeat each configuration
-repeat_times = 3
+repeat_times = 5
 
 # Generate all combinations
 experiments = generate_combinations(params_options, repeat_times=repeat_times)
