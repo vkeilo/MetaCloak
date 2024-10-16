@@ -1,6 +1,6 @@
 #### Variables that you should set before running the script
 # setting the GPU id
-export CUDA_VISIBLE_DEVICES=0
+# export CUDA_VISIBLE_DEVICES=0
 # for logging , please set your own wandb entity name
 export wandb_entity_name=vkeilo
 # export wandb_project_name="metacloak_test1"

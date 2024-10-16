@@ -2,6 +2,7 @@ import os
 import json
 import time
 import re
+import argparse
 
 def set_env_with_expansion(key, value):
     """
@@ -28,9 +29,9 @@ def test_one_args(args,test_lable):
     # bash run : nohup bash script/gen_and_eval_vk.sh > output_MAT-1000-200-6-6-x1x1-radius11-allSGLD-rubust0.log 2>&1
     os.environ["test_timestamp"] = str(int(time.time()))
     if os.getenv('attack_mode') == "pgd":
-        os.environ["wandb_run_name"] = f"MAT-{os.getenv('total_train_steps')}-{os.getenv('interval')}-{os.getenv('sampling_times_delta')}-{os.getenv('sampling_times_theta')}-x{os.getenv('defense_pgd_step_num')}x{os.getenv('attack_pgd_step_num')}-radius{os.getenv('r')}-{os.getenv('SGLD_method')}-robust{os.getenv('attack_pgd_radius')}-{os.getenv('test_timestamp')}"
+        os.environ["wandb_run_name"] = f"MAT-{os.getenv('total_train_steps')}-{os.getenv('interval')}-{os.getenv('sampling_times_delta')}-{os.getenv('sampling_times_theta')}-x{os.getenv('defense_pgd_step_num')}x{os.getenv('attack_pgd_step_num')}-radius{os.getenv('r')}-{os.getenv('SGLD_method')}-robust{os.getenv('attack_pgd_radius')}-{os.getenv('model_select_mode')}-{os.getenv('test_timestamp')}"
     elif os.getenv('attack_mode') == "pan":
-        os.environ["wandb_run_name"] = f"MAT-PAN-{os.getenv('total_train_steps')}-{os.getenv('interval')}-{os.getenv('sampling_times_delta')}-{os.getenv('sampling_times_theta')}-x{os.getenv('defense_pgd_step_num')}x{os.getenv('attack_pgd_step_num')}-radius{os.getenv('r')}-{os.getenv('SGLD_method')}-robust{os.getenv('attack_pgd_radius')}-{os.getenv('pan_lambda_S')}-{os.getenv('pan_lambda_D')}-{os.getenv('pan_omiga')}-k={os.getenv('pan_k')}-use{os.getenv('pan_mode')}-{os.getenv('pan_use_val')}-{os.getenv('test_timestamp')}"
+        os.environ["wandb_run_name"] = f"MAT-PAN-{os.getenv('total_train_steps')}-{os.getenv('interval')}-{os.getenv('sampling_times_delta')}-{os.getenv('sampling_times_theta')}-x{os.getenv('defense_pgd_step_num')}x{os.getenv('attack_pgd_step_num')}-radius{os.getenv('r')}-{os.getenv('SGLD_method')}-robust{os.getenv('attack_pgd_radius')}-{os.getenv('model_select_mode')}-{os.getenv('pan_lambda_S')}-{os.getenv('pan_lambda_D')}-{os.getenv('pan_omiga')}-k={os.getenv('pan_k')}-use{os.getenv('pan_mode')}-{os.getenv('pan_use_val')}-{os.getenv('test_timestamp')}"
     # python 实现 export test_timestamp=$(date +%s)
     run_name = os.getenv("wandb_run_name")
     print(f"run_name: {run_name}")
@@ -87,10 +88,19 @@ if __name__ == "__main__":
     print("batch test start...")
     # run in dir MetaCloak
     ADB_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    Pro_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
     os.environ["ADB_PROJECT_ROOT"] = ADB_path
-    os.environ["PYTHONPATH"] = str(os.getenv("PYTHONPATH")) + ":" + ADB_path
-    untest_args_json_path  = "run_in_batch/untest.json"
-    finished_log_json_path = "run_in_batch/finished.json"
+    os.environ["PYTHONPATH"] = str(os.getenv("PYTHONPATH")) + ":" + ADB_path + ":" + Pro_path
+    
+    # 解析参数
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--target", type=str, default="untest.json")
+    parser.add_argument("--save_path", type=str, default="finished.json")
+    parser.add_argument("--device_n", type=str, default="0")
+
+    os.environ["CUDA_VISIBLE_DEVICES"] = parser.parse_args().device_n
+    untest_args_json_path = "run_in_batch/"+ parser.parse_args().target
+    finished_log_json_path = "run_in_batch/" + parser.parse_args().save_path
     untest_file_con = json.load(open(untest_args_json_path))
     untest_args_list = untest_file_con["untest_args_list"].copy()
     test_lable = untest_file_con["test_lable"]

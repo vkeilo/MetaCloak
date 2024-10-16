@@ -63,7 +63,7 @@ class PGDAttacker():
     
     def perturb(self, models, x,ori_x,vae, tokenizer, noise_scheduler, target_tensor=None,device=torch.device("cuda"), close_grad_for_efficiency =False):
         if self.noattack:
-            # print("no need to attack")
+            print("attacker no need to attack")
             return x 
         
         args=self.args

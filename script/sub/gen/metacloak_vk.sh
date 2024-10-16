@@ -1,7 +1,7 @@
 # source activate $ADB_ENV_NAME;
 dir_of_this_file="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 source $dir_of_this_file/generic.sh
-PYTHONPATH=$PYTHONPATH$:/data/home/yekai/github/mypro
+# PYTHONPATH=$PYTHONPATH$:/data/home/yekai/github/mypro
 ###### the following are method-related variables ######
 alg_file_name="metacloak_vk"
 round=final

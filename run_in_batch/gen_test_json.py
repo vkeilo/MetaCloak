@@ -28,7 +28,7 @@ def generate_combinations(base_params, repeat_times=1):
     return experiments
 
 # Define the possible values for each parameter
-test_lable = "100-20-pan"
+test_lable = "ori"
 params_options = {
     "MODEL_ROOT": ["${ADB_PROJECT_ROOT}"],
     "gen_model_path": ["${MODEL_ROOT}/SD/stable-diffusion-2-1-base"],
@@ -45,19 +45,19 @@ params_options = {
     "dreambooth_training_steps": [1000],
     "unroll_steps": [1],
     "defense_sample_num": [1],
-    "defense_pgd_step_num": [1,3,9],
+    "defense_pgd_step_num": [6,3,1],
     "sampling_times_delta": [1],
     "sampling_times_theta": [1],
     "attack_pgd_step_num": [1],
-    "attack_pgd_radius": [0],
+    "attack_pgd_radius": [0,3,9],
     "r": [11],
-    "SGLD_method": ["noSGLD","deltaSGLD"],
+    "SGLD_method": ["noSGLD"],
     "gauK": [7],
     "eval_gen_img_num": [16],
-    "attack_mode": ["pan"],
-    "pan_lambda_D": [0.01, 0.001],
-    "pan_lambda_S": [1000,  10, 0],  # Multiple values for pan_lambda_S
-    "pan_omiga": [0.5,1],
+    "attack_mode": ["pgd"],
+    "pan_lambda_D": [0],
+    "pan_lambda_S": [0],  # Multiple values for pan_lambda_S
+    "pan_omiga": [1],
     "pan_k": [2],  # Multiple values for pan_k
     "pan_mode": ["S"],
     "pan_use_val": ["last"]
