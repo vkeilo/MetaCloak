@@ -69,6 +69,8 @@ if [ ! -d "$INSTANCE_DIR_CHECK" ]; then
     --init_model_state_pool_pth_path=$init_model_state_pool_pth_path \
     --pan_use_val=$pan_use_val \
     --model_select_mode=$model_select_mode \
+    --total_gan_step=$total_gan_step \
+    --img_save_interval=$img_save_interval \
     """
     
     if [ "$train_mode" = "gau" ]; then

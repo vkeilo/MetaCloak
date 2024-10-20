@@ -20,8 +20,8 @@ export train_exp_name_prefix=$prefix_name_train
 train_exp_name=$gen_exp_name-$train_exp_name_prefix-$train_mode-eval
 train_hyper=gen-$gen_exp_name-$gen_exp_hyper-eval-$train_exp_name_prefix-rate-$poison_rate
 
-export DREAMBOOTH_OUTPUT_DIR="$ADB_PROJECT_ROOT/exp_data/train_output/$train_exp_name/$train_hyper/${instance_name}_DREAMBOOTH"
-export TEXTUAL_INVERSION_OUTPUT_DIR="$ADB_PROJECT_ROOT/exp_data/train_output/$train_exp_name/$train_hyper/${instance_name}_TEXTUAL_INVERSION"
+export DREAMBOOTH_OUTPUT_DIR="$ADB_PROJECT_ROOT/exp_data-$test_timestamp/train_output/$train_exp_name/$train_hyper/${instance_name}_DREAMBOOTH"
+export TEXTUAL_INVERSION_OUTPUT_DIR="$ADB_PROJECT_ROOT/exp_data-$test_timestamp/train_output/$train_exp_name/$train_hyper/${instance_name}_TEXTUAL_INVERSION"
 
 cd $ADB_PROJECT_ROOT/robust_facecloak
 instance_prompt="a photo of $eval_prompt $class_name"
