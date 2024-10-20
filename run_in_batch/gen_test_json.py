@@ -28,7 +28,7 @@ def generate_combinations(base_params, repeat_times=1):
     return experiments
 
 # Define the possible values for each parameter
-test_lable = "ori"
+test_lable = "test"
 params_options = {
     "MODEL_ROOT": ["${ADB_PROJECT_ROOT}"],
     "gen_model_path": ["${MODEL_ROOT}/SD/stable-diffusion-2-1-base"],
@@ -39,43 +39,45 @@ params_options = {
     "wandb_project_name": ["metacloak_PAN"],
     "mixed_precision": ["bf16"],
     "advance_steps": [2],
-    "total_trail_num": [4],
+    "total_trail_num": [2],
     "total_train_steps": [100],
+    "total_gan_step":[0],
     "interval": [20],
     "dreambooth_training_steps": [1000],
     "unroll_steps": [1],
     "defense_sample_num": [1],
-    "defense_pgd_step_num": [6,3,1],
+    "defense_pgd_step_num": [6],
     "sampling_times_delta": [1],
     "sampling_times_theta": [1],
-    "attack_pgd_step_num": [1],
-    "attack_pgd_radius": [0,3,9],
+    "attack_pgd_step_num": [3],
+    "attack_pgd_radius": [0],
     "r": [11],
     "SGLD_method": ["noSGLD"],
     "gauK": [7],
     "eval_gen_img_num": [16],
     "attack_mode": ["pgd"],
-    "pan_lambda_D": [0],
-    "pan_lambda_S": [0],  # Multiple values for pan_lambda_S
+    "pan_lambda_D": [0.01],
+    "pan_lambda_S": [10],  # Multiple values for pan_lambda_S
     "pan_omiga": [1],
     "pan_k": [2],  # Multiple values for pan_k
     "pan_mode": ["S"],
-    "pan_use_val": ["last"]
+    "pan_use_val": ["last"],
+    "img_save_interval":[5],
 }
 
 # Number of times to repeat each configuration
-repeat_times = 5
+repeat_times = 1
 
 # Generate all combinations
 experiments = generate_combinations(params_options, repeat_times=repeat_times)
 
 # Wrap in "untest_args_list" for proper JSON structure
-output = {"test_lable":test_lable ,"untest_args_list": experiments}
+output = {"test_lable":test_lable ,"settings":params_options,"untest_args_list": experiments}
 
 # Print the generated combinations as JSON
 print(json.dumps(output, indent=4))
 
 py_path = os.path.dirname(os.path.abspath(__file__))
 # Save to a JSON file
-with open(f"{py_path}/experiment_params.json", "w") as outfile:
+with open(f"{py_path}/{test_lable}.json", "w") as outfile:
     json.dump(output, outfile, indent=4)

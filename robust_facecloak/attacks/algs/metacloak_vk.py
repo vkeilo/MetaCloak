@@ -557,6 +557,14 @@ def parse_args():
         default=0,
     )
 
+    # vkeilo add it
+    # save间隔
+    parser.add_argument(
+        "--img_save_interval",
+        type=int,
+        default=1000,
+    )
+
 
 
     # # vkeilo add it
@@ -729,7 +737,8 @@ def main(args):
     all_trans = transforms.Compose(all_trans)
     
     
-    from robust_facecloak.attacks.worker.robust_pgd_worker_vkecholoss import RobustPGDAttacker
+    from robust_facecloak.attacks.worker.robust_pgd_worker_vk import RobustPGDAttacker
+    from robust_facecloak.attacks.worker.robust_pan_worker_vk import RobustPANAttacker
     from MetaCloak.robust_facecloak.attacks.worker.pgd_worker import PGDAttacker
     from MetaCloak.robust_facecloak.attacks.worker.pan_worker import PANAttacker
     # 构建攻击者和防御者，攻击者使用PGD算法
@@ -754,7 +763,7 @@ def main(args):
     #     sample_num=args.defense_sample_num,
     #     x_range=[0, 255],
     # )
-    assert args.attack_mode in ['pgd','pan']
+    assert args.attack_mode in ['pgd','pan','EOTpan']
     if args.attack_mode == 'pgd':
         attacker = PGDAttacker(
             radius=args.attack_pgd_radius, 
@@ -779,7 +788,7 @@ def main(args):
             # vkeilo add it
             # step_sample_num=args.sampling_times_delta
         )
-    else:
+    elif args.attack_mode == 'pan':
         attacker = PANAttacker(
             radius=args.defense_pgd_radius,
             steps=args.defense_pgd_step_num,
@@ -794,6 +803,36 @@ def main(args):
             k = args.pan_k,
             mode = args.pan_mode,
             use_val = args.pan_use_val,
+        )
+    else:
+        attacker = PANAttacker(
+            radius=args.attack_pgd_radius,
+            steps=args.attack_pgd_step_num,
+            step_size=args.attack_pgd_step_size,
+            # ascending=args.defense_pgd_ascending,
+            args=args,
+            # trans=all_trans,
+            # sample_num=args.defense_sample_num,
+            x_range=[0, 255],
+            lambda_D = args.pan_lambda_D,
+            lambda_S = args.pan_lambda_S,
+            k = args.pan_k,
+            mode = args.pan_mode,
+            use_val = args.pan_use_val,
+        )
+        defender = RobustPANAttacker(
+            radius=args.defense_pgd_radius,
+            steps=args.defense_pgd_step_num, # 6
+            step_size=args.defense_pgd_step_size,
+            random_start=args.defense_pgd_random_start,
+            ascending=args.defense_pgd_ascending,
+            args=args,
+            attacker=attacker, 
+            trans=all_trans,
+            sample_num=args.defense_sample_num,
+            x_range=[0, 255],
+            # vkeilo add it
+            # step_sample_num=args.sampling_times_delta
         )
 
     # 模型加载，本次实验只有一个
@@ -929,7 +968,7 @@ def main(args):
                         print(f'start {args.sampling_times_delta} times of delta sampling ')
                         for k in range(args.sampling_times_delta):
                             print(f'sample delta {k}/{args.sampling_times_delta} times')
-                            if args.attack_mode == "pgd":
+                            if args.attack_mode == "pgd" or args.attack_mode == "EOTpan":
                                 perturbed_data,rubust_loss = defender.perturb(f, perturbed_data, original_data, vae, tokenizer, noise_scheduler,)
                             elif args.attack_mode == "pan":
                                 perturbed_data,rubust_loss = attacker.attack(f, perturbed_data, original_data, vae, tokenizer, noise_scheduler,)
@@ -1010,7 +1049,7 @@ def main(args):
                         # )
                         pbar.update(1)
                         # 每1000次扰动优化，保存一次扰动示例图像
-                        if cnt % 1000 == 0:
+                        if cnt % args.img_save_interval == 0:
                             save_image(perturbed_data, f"{cnt}")
                     # frequently release the memory due to limited GPU memory, 
                     # env with more gpu might consider to remove the following lines for boosting speed
@@ -1060,7 +1099,7 @@ def main(args):
             print(f'start {args.sampling_times_delta} times of delta sampling ')
             for k in range(args.sampling_times_delta):
                 print(f'sample delta {k}/{args.sampling_times_delta} times')
-                if args.attack_mode == "pgd":
+                if args.attack_mode == "pgd" or args.attack_mode == "EOTpan":
                     perturbed_data,rubust_loss = defender.perturb(f, perturbed_data, original_data, vae, tokenizer, noise_scheduler,)
                 elif args.attack_mode == "pan":
                     perturbed_data,rubust_loss = attacker.attack(f, perturbed_data, original_data, vae, tokenizer, noise_scheduler,)
@@ -1144,7 +1183,7 @@ def main(args):
             # )
             pbar.update(1)
             # 每1000次扰动优化，保存一次扰动示例图像
-            if cnt % 1000 == 0:
+            if cnt % args.img_save_interval == 0:
                 save_image(perturbed_data, f"{cnt}")
             # frequently release the memory due to limited GPU memory, 
             # env with more gpu might consider to remove the following lines for boosting speed
