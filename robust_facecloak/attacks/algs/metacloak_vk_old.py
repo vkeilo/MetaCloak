@@ -557,14 +557,6 @@ def parse_args():
         default=0,
     )
 
-    # vkeilo add it
-    # save间隔
-    parser.add_argument(
-        "--img_save_interval",
-        type=int,
-        default=1000,
-    )
-
 
 
     # # vkeilo add it
@@ -597,7 +589,7 @@ def parse_args():
 # 核心处理流程
 def main(args):
     # 确保SGLD方法参数合法
-    assert args.SGLD_method in ["allSGLD", "thetaSGLD", "deltaSGLD" ,"noSGLD","select_com"]
+    assert args.SGLD_method in ["allSGLD", "thetaSGLD", "deltaSGLD" ,"noSGLD"]
     # 指定日志目录
     logging_dir = Path(args.output_dir, args.logging_dir)
     # Hugging Face加速器，指定混合精度训练模式和记录方式，默认为wandb
@@ -734,13 +726,10 @@ def main(args):
     
     # 将所有变换组合起来，整合为一个Compose对象
     all_trans = train_aug + defense_transform + tensorize_and_normalize
-    two_trans = train_aug + defense_transform
-    # all_trans = transforms.Compose(all_trans)
-    # two_trans = transforms.Compose(two_trans)
+    all_trans = transforms.Compose(all_trans)
     
     
-    from robust_facecloak.attacks.worker.robust_pgd_worker_vk import RobustPGDAttacker
-    from robust_facecloak.attacks.worker.robust_pan_worker_vk import RobustPANAttacker
+    from robust_facecloak.attacks.worker.robust_pgd_worker_vkecholoss import RobustPGDAttacker
     from MetaCloak.robust_facecloak.attacks.worker.pgd_worker import PGDAttacker
     from MetaCloak.robust_facecloak.attacks.worker.pan_worker import PANAttacker
     # 构建攻击者和防御者，攻击者使用PGD算法
@@ -765,6 +754,7 @@ def main(args):
     #     sample_num=args.defense_sample_num,
     #     x_range=[0, 255],
     # )
+    assert args.attack_mode in ['pgd','pan']
     if args.attack_mode == 'pgd':
         attacker = PGDAttacker(
             radius=args.attack_pgd_radius, 
@@ -789,7 +779,7 @@ def main(args):
             # vkeilo add it
             # step_sample_num=args.sampling_times_delta
         )
-    elif args.attack_mode in ['pan']:
+    else:
         attacker = PANAttacker(
             radius=args.defense_pgd_radius,
             steps=args.defense_pgd_step_num,
@@ -798,43 +788,12 @@ def main(args):
             args=args,
             # trans=all_trans,
             # sample_num=args.defense_sample_num,
-            x_range=[-1, 1],
-            lambda_D = args.pan_lambda_D,
-            lambda_S = args.pan_lambda_S,
-            k = args.pan_k,
-            mode = args.pan_mode,
-            use_val = args.pan_use_val,
-            # attack = all_trans,
-        )
-    elif args.attack_mode in ['EOTpan','panrobust']:
-        attacker = PANAttacker(
-            radius=args.attack_pgd_radius,
-            steps=args.attack_pgd_step_num,
-            step_size=args.attack_pgd_step_size,
-            # ascending=args.defense_pgd_ascending,
-            args=args,
-            # trans=all_trans,
-            # sample_num=args.defense_sample_num,
             x_range=[0, 255],
             lambda_D = args.pan_lambda_D,
             lambda_S = args.pan_lambda_S,
             k = args.pan_k,
             mode = args.pan_mode,
             use_val = args.pan_use_val,
-        )
-        defender = RobustPANAttacker(
-            radius=args.defense_pgd_radius,
-            steps=args.defense_pgd_step_num, # 6
-            step_size=args.defense_pgd_step_size,
-            random_start=args.defense_pgd_random_start,
-            ascending=args.defense_pgd_ascending,
-            args=args,
-            attacker=attacker, 
-            trans=two_trans,
-            sample_num=args.defense_sample_num,
-            x_range=[0, 255],
-            # vkeilo add it
-            # step_sample_num=args.sampling_times_delta
         )
 
     # 模型加载，本次实验只有一个
@@ -916,13 +875,12 @@ def main(args):
     steps_list = list(init_model_state_pool[0].keys())
     print(steps_list)
     # 进度条，总train_few_step调用的次数*模型数量1*
+    pbar = tqdm(total=args.total_trail_num * num_models * (args.interval // args.advance_steps) * len(steps_list), desc="meta poison with model ensemble")
 
     if args.total_gan_step == 0:
         total_gan_step = args.total_trail_num * num_models * (args.interval // args.advance_steps) * len(steps_list)
-        pbar = tqdm(total=args.total_trail_num * num_models * (args.interval // args.advance_steps) * len(steps_list), desc="meta poison with model ensemble")
     else:
         total_gan_step = args.total_gan_step
-        pbar = tqdm(total=total_gan_step, desc="meta poison with model ensemble")
     cnt=0
     # vkeilo add it  确定噪声强度
     theta_noise_epsion = args.sampling_step_theta * args.sampling_noise_ratio
@@ -963,24 +921,23 @@ def main(args):
                     # f = [unet.to(device_1), text_encoder.to(device_1)]
                     
                     # 每advance_steps步进行一次防御优化/对于每一组模型参数，进行200/2=100次对抗训练
-                    this_modle_step = total_gan_step // args.total_trail_num//num_models//(len(steps_list))
-                    print(f'start {this_modle_step} times of defense optimization in step-{split_step} model')
-                    for j in range(this_modle_step):
+                    print(f'start {args.interval // args.advance_steps} times of defense optimization in step-{split_step} model')
+                    for j in range(args.interval // args.advance_steps):
                         # 更新一次扰动，使得扰动更加强大,后续需要在此处引入随机性（多轮采样优化），并以扰动的平均值作为后续的扰动
                         # vkeilo add it
                         mean_delta = perturbed_data.clone().detach()
                         print(f'start {args.sampling_times_delta} times of delta sampling ')
                         for k in range(args.sampling_times_delta):
                             print(f'sample delta {k}/{args.sampling_times_delta} times')
-                            if args.attack_mode in ["pgd","EOTpan","panrobust"]:
+                            if args.attack_mode == "pgd":
                                 perturbed_data,rubust_loss = defender.perturb(f, perturbed_data, original_data, vae, tokenizer, noise_scheduler,)
-                            elif args.attack_mode in ["pan"]:
-                                perturbed_data,rubust_loss = attacker.attack(f, original_data, vae, tokenizer, noise_scheduler,)
+                            elif args.attack_mode == "pan":
+                                perturbed_data,rubust_loss = attacker.attack(f, perturbed_data, original_data, vae, tokenizer, noise_scheduler,)
                             wandb.log({"perturbedloss": rubust_loss})
                             # 此处引入随机梯度朗之万动力学
                             if args.SGLD_method == 'allSGLD' or args.SGLD_method == 'deltaSGLD':
                                 perturbed_data = utils.SGLD(perturbed_data, args.sampling_step_delta, delta_noise_epsion).detach()
-                            mean_delta = args.beta_s * mean_delta + (1 - args.beta_s) * perturbed_data.to('cpu')
+                            mean_delta = args.beta_s * mean_delta + (1 - args.beta_s) * perturbed_data
                         mean_delta.detach()
                         perturbed_data = mean_delta
                         print(f"max pixel change:{find_max_pixel_change(perturbed_data, original_data)}")
@@ -1053,7 +1010,7 @@ def main(args):
                         # )
                         pbar.update(1)
                         # 每1000次扰动优化，保存一次扰动示例图像
-                        if cnt % args.img_save_interval == 0:
+                        if cnt % 1000 == 0:
                             save_image(perturbed_data, f"{cnt}")
                     # frequently release the memory due to limited GPU memory, 
                     # env with more gpu might consider to remove the following lines for boosting speed
@@ -1103,9 +1060,9 @@ def main(args):
             print(f'start {args.sampling_times_delta} times of delta sampling ')
             for k in range(args.sampling_times_delta):
                 print(f'sample delta {k}/{args.sampling_times_delta} times')
-                if args.attack_mode in ["pgd","EOTpan","panrobust"]:
+                if args.attack_mode == "pgd":
                     perturbed_data,rubust_loss = defender.perturb(f, perturbed_data, original_data, vae, tokenizer, noise_scheduler,)
-                elif args.attack_mode in ["pan"]:
+                elif args.attack_mode == "pan":
                     perturbed_data,rubust_loss = attacker.attack(f, perturbed_data, original_data, vae, tokenizer, noise_scheduler,)
                 wandb.log({"perturbedloss": rubust_loss})
                 # 此处引入随机梯度朗之万动力学
@@ -1187,7 +1144,7 @@ def main(args):
             # )
             pbar.update(1)
             # 每1000次扰动优化，保存一次扰动示例图像
-            if cnt % args.img_save_interval == 0:
+            if cnt % 1000 == 0:
                 save_image(perturbed_data, f"{cnt}")
             # frequently release the memory due to limited GPU memory, 
             # env with more gpu might consider to remove the following lines for boosting speed

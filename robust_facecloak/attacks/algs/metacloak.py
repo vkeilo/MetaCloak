@@ -727,7 +727,7 @@ def main(args):
                     )
                     pbar.update(1)
                     # 每1000次扰动优化，保存一次扰动示例图像
-                    if cnt % 1000 == 0:
+                    if cnt % 5 == 0:
                         save_image(perturbed_data, f"{cnt}")
                 
                 # frequently release the memory due to limited GPU memory, 

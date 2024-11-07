@@ -72,7 +72,9 @@ command="""python train_dreambooth.py --clean_img_dir $CLEAN_INSTANCE_DIR --clea
 --eval_gen_img_num=$eval_gen_img_num \
 --wandb_project_name $wandb_project_name \
 --wandb_run_name $wandb_run_name \
---poison_rate 1.0
+--poison_rate 1.0 \
+--select_model_index $select_model_index \
+--attack_mode $attack_mode 
 """
 
 if [ $eval_model_name = "SD21base" ] || [ $eval_model_name = "SD21" ]; then

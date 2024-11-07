@@ -28,7 +28,7 @@ def generate_combinations(base_params, repeat_times=1):
     return experiments
 
 # Define the possible values for each parameter
-test_lable = "test"
+test_lable = "NOroubustPANtest"
 params_options = {
     "MODEL_ROOT": ["${ADB_PROJECT_ROOT}"],
     "gen_model_path": ["${MODEL_ROOT}/SD/stable-diffusion-2-1-base"],
@@ -39,30 +39,31 @@ params_options = {
     "wandb_project_name": ["metacloak_PAN"],
     "mixed_precision": ["bf16"],
     "advance_steps": [2],
-    "total_trail_num": [2],
-    "total_train_steps": [100],
-    "total_gan_step":[0],
-    "interval": [20],
+    "total_trail_num": [4],
+    "total_train_steps": [1000],
+    "total_gan_step":[120],
+    "interval": [200],
     "dreambooth_training_steps": [1000],
     "unroll_steps": [1],
     "defense_sample_num": [1],
-    "defense_pgd_step_num": [6],
+    "defense_pgd_step_num": [1],
     "sampling_times_delta": [1],
     "sampling_times_theta": [1],
-    "attack_pgd_step_num": [3],
-    "attack_pgd_radius": [0],
+    "attack_pgd_step_num": [1],
+    "attack_pgd_radius": [7],
     "r": [11],
     "SGLD_method": ["noSGLD"],
     "gauK": [7],
     "eval_gen_img_num": [16],
-    "attack_mode": ["pgd"],
-    "pan_lambda_D": [0.01],
-    "pan_lambda_S": [10],  # Multiple values for pan_lambda_S
+    "attack_mode": ["pan"],
+    "pan_lambda_D": [0],
+    "pan_lambda_S": [0],  # Multiple values for pan_lambda_S
     "pan_omiga": [1],
     "pan_k": [2],  # Multiple values for pan_k
     "pan_mode": ["S"],
     "pan_use_val": ["last"],
     "img_save_interval":[5],
+    "select_model_index":[1]
 }
 
 # Number of times to repeat each configuration

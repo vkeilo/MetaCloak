@@ -29,13 +29,17 @@ def test_one_args(args,test_lable):
     # bash run : nohup bash script/gen_and_eval_vk.sh > output_MAT-1000-200-6-6-x1x1-radius11-allSGLD-rubust0.log 2>&1
     os.environ["test_timestamp"] = str(int(time.time()))
     test_timestamp = os.getenv("test_timestamp")
+    os.system(f"mv exp_data exp_data-{test_timestamp}")
     totle_step = os.getenv('total_train_steps')
     if os.getenv('total_gan_step') != "0":
         totle_step = 'totle' + os.getenv('total_gan_step')
     if os.getenv('attack_mode') in ["pgd"]:
-        os.environ["wandb_run_name"] = f"MAT-{totle_step}-{os.getenv('interval')}-{os.getenv('sampling_times_delta')}-{os.getenv('sampling_times_theta')}-x{os.getenv('defense_pgd_step_num')}x{os.getenv('attack_pgd_step_num')}s{os.getenv('defense_sample_num')}-radius{os.getenv('r')}-{os.getenv('SGLD_method')}-robust{os.getenv('attack_pgd_radius')}-{os.getenv('model_select_mode')}-{os.getenv('test_timestamp')}"
-    elif os.getenv('attack_mode') in ["pan","EOTpan","panrobust"]:
-        os.environ["wandb_run_name"] = f"MAT-PAN-{os.getenv('attack_mode')}-{totle_step}-{os.getenv('interval')}-{os.getenv('sampling_times_delta')}-{os.getenv('sampling_times_theta')}-x{os.getenv('defense_pgd_step_num')}x{os.getenv('attack_pgd_step_num')}s{os.getenv('defense_sample_num')}-radius{os.getenv('r')}-{os.getenv('SGLD_method')}-robust{os.getenv('attack_pgd_radius')}-{os.getenv('model_select_mode')}-{os.getenv('pan_lambda_S')}-{os.getenv('pan_lambda_D')}-{os.getenv('pan_omiga')}-k={os.getenv('pan_k')}-use{os.getenv('pan_mode')}-{os.getenv('pan_use_val')}-{os.getenv('test_timestamp')}"
+        os.environ["wandb_run_name"] = f"MAT-{totle_step}-{os.getenv('interval')}-{os.getenv('sampling_times_delta')}-{os.getenv('sampling_times_theta')}-x{os.getenv('defense_pgd_step_num')}x{os.getenv('attack_pgd_step_num')}-radius{os.getenv('r')}-{os.getenv('SGLD_method')}-robust{os.getenv('attack_pgd_radius')}-{os.getenv('model_select_mode')}-{os.getenv('test_timestamp')}"
+    if os.getenv('attack_mode') in ["pan","EOTpan","panrobust"]:
+        os.environ["wandb_run_name"] = f"MAT-PAN-{os.getenv('attack_mode')}-{totle_step}-{os.getenv('interval')}-{os.getenv('sampling_times_delta')}-{os.getenv('sampling_times_theta')}-x{os.getenv('defense_pgd_step_num')}x{os.getenv('attack_pgd_step_num')}-radius{os.getenv('r')}-{os.getenv('SGLD_method')}-robust{os.getenv('attack_pgd_radius')}-{os.getenv('model_select_mode')}-{os.getenv('pan_lambda_S')}-{os.getenv('pan_lambda_D')}-{os.getenv('pan_omiga')}-k={os.getenv('pan_k')}-use{os.getenv('pan_mode')}-{os.getenv('pan_use_val')}-{os.getenv('test_timestamp')}"
+    if os.getenv('attack_mode') in ["select_com"]:
+        print("set run_name!!!!!")
+        os.environ["wandb_run_name"] =f"model_{os.getenv('select_model_index')}"
     # python 实现 export test_timestamp=$(date +%s)
     run_name = os.getenv("wandb_run_name")
     print(f"run_name: {run_name}")
@@ -51,8 +55,10 @@ def test_one_args(args,test_lable):
         os.mkdir("logs_output")
     if not os.path.exists(f"logs_output/{test_lable}"):
         os.mkdir(f"logs_output/{test_lable}")
-    os.system(f"mv exp_data-{test_timestamp} exp_datas_output/{test_lable}/exp_data_{run_name}")
-    os.system(f"mv output_{run_name}.log logs_output/{test_lable}/output_{run_name}.log")
+    # os.system(f"mv exp_data-{test_timestamp} exp_datas_output/{test_lable}/exp_data_{run_name}")
+    os.system(f"mv exp_data-{test_timestamp} exp_data")
+    os.system(f"rm exp_data/train_output -r")
+    os.system(f"mv output_{run_name}.log logs_output/{test_lable}/output_{run_name}-{test_timestamp}.log")
     return run_name
 
 def update_finished_json(finished_log_json_path, run_name):

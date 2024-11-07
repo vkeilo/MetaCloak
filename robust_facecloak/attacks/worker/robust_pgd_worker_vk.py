@@ -3,13 +3,13 @@ import numpy as np
 from PIL import Image
 import torchvision.transforms as transforms
 import torch.nn.functional as F
-# vkeilo add it
-import utils
+
+# import lpips
 
 
     
 class RobustPGDAttacker():
-    def __init__(self, radius, steps, step_size, random_start, trans, sample_num, attacker, norm_type='l-infty', ascending=True, args=None, x_range=[0, 255], target_weight=1.0, step_sample_num=1):        
+    def __init__(self, radius, steps, step_size, random_start, trans, sample_num, attacker, norm_type='l-infty', ascending=True, args=None, x_range=[0, 255], target_weight=1.0):        
         self.noattack = radius == 0. or steps == 0 or step_size == 0.
         self.radius = radius
         self.step_size = step_size
@@ -23,8 +23,6 @@ class RobustPGDAttacker():
         self.attacker = attacker
         self.left, self.right = x_range
         self.pattern = np.random.randint( 0, 72, size=(16, 16, 3), dtype=np.uint8)
-        # vkeilo add it
-        self.step_sample_num = step_sample_num
         print(
             "summary of the attacker: \n"
             f"radius: {self.radius}\n"
@@ -180,7 +178,7 @@ class RobustPGDAttacker():
                 x = self._clip_(x, ori_x, ).detach_()
         return x.cpu()
         
-    def perturb(self, models, x, ori_x, vae, tokenizer, noise_scheduler, target_tensor=None, adaptive_target=False, loss_type=None):
+    def perturb(self, models, x, ori_x, vae, tokenizer, noise_scheduler, target_tensor=None, adaptive_target=False, loss_type=None, device = torch.device("cuda")):
         args=self.args
         unet, text_encoder = models
         weight_dtype = torch.bfloat16
@@ -191,7 +189,6 @@ class RobustPGDAttacker():
         elif args.mixed_precision == "bf16":
             weight_dtype = torch.bfloat16
 
-        
         device = torch.device("cuda")
         vae.to(device, dtype=weight_dtype)
         text_encoder.to(device, dtype=weight_dtype)
@@ -202,6 +199,7 @@ class RobustPGDAttacker():
         
         
         if self.noattack:
+            print("defender no need to defend")
             return x
         
         # ''' temporarily shutdown autograd of model to improve pgd efficiency '''
@@ -228,46 +226,46 @@ class RobustPGDAttacker():
         ).input_ids.repeat(len(x), 1)
         
         x.requires_grad_(True)
-        delta_noise_epsion = self.args.sampling_step_delta *self.args.sampling_noise_ratio
+        # 多次采样
+        loss_list = []
+        print(f'defender start {self.steps} steps perturb')
         for _step in range(self.steps):
+            print(f'\tdefender {_step}/{self.steps} step perturb')
             x.requires_grad = True
-            mean_x = x.clone().detach()
-            # vkeilo add it
-            for _step_sample_num in range(self.step_sample_num):
-                for _sample in range(self.sample_num):
+            print(f'\tdefender start {self.sample_num} samples perturb')
+            # 默认一次更新就对抗扰动一次
+            for _sample in range(self.sample_num):
+                print(f'\t\tdefender{_sample}/{self.sample_num} sample perturb')
+                # 模拟微调训练方对图像进行一定变换以缓解毒性
+                def_x_trans = self.transform(x).to(device, dtype=weight_dtype)
+                # 获得被进一步对抗扰动后的样本adv_x
+                adv_x = self.attacker.perturb(
+                    models, def_x_trans, self.transform(ori_x), vae, tokenizer, noise_scheduler, 
+                )
+                # 在额外扰动的adv_x上评估模型鲁棒性
+                loss = self.certi(models, adv_x, vae, noise_scheduler, input_ids, device, weight_dtype, target_tensor,loss_type, ori_x,)
+                loss_list.append(loss.item())
+                # 多次采样积累能够降低模型鲁棒性的梯度
+                loss.backward()
+            # 根据当前梯度信息更新x
+            with torch.no_grad():
+                grad = x.grad.data
+                
+                if not self.ascending: 
+                    grad.mul_(-1)
                     
-                    def_x_trans = self.transform(x).to(device, dtype=weight_dtype)
-                    adv_x = self.attacker.perturb(
-                        models, def_x_trans, self.transform(ori_x), vae, tokenizer, noise_scheduler, 
-                    )
-                    
-                    loss = self.certi(models, adv_x, vae, noise_scheduler, input_ids, device, weight_dtype, target_tensor,loss_type, ori_x,)
-                    
-                    loss.backward()
-
-                with torch.no_grad():
-                    grad = x.grad.data
-                    # vkeilo add it
-                    # 引入SGLD
-                    # noise_sgld = torch.randn_like(grad) * torch.sqrt(torch.tensor(self.sampling_step_delta))
-                    grad = utils.SGLD(grad, self.args.sampling_step_delta, delta_noise_epsion).detach()
-                    if not self.ascending: 
-                        grad.mul_(-1)
-                        
-                    if self.norm_type == 'l-infty':
-                        # vkeilo change it x.add_(torch.sign(grad), alpha=self.step_size)
-                        x.add_(torch.sign(grad), alpha=self.step_size)
-                    else:
-                        raise NotImplementedError
-                    x = self._clip_(x, ori_x, ).detach_()
-                mean_x = args.beta_s * mean_x + (1 - args.beta_s) * x
-            mean_x.detach_()
-            x = mean_x
+                if self.norm_type == 'l-infty':
+                    x.add_(torch.sign(grad), alpha=self.step_size)
+                else:
+                    raise NotImplementedError
+                x = self._clip_(x, ori_x, ).detach_()
+            # wandb.log({"Adversarial Loss": loss.item()})  
         ''' reopen autograd of model after pgd '''
         for mi in [text_encoder, unet]:
             for pp in mi.parameters():
                 pp.requires_grad = True
-        return x.cpu()
+        mean_loss = np.mean(loss_list)
+        return x.cpu(),mean_loss
     def _clip_(self, adv_x, x, ):
         adv_x = adv_x - x
         if self.norm_type == 'l-infty':

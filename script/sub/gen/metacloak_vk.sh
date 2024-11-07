@@ -6,6 +6,9 @@ source $dir_of_this_file/generic.sh
 alg_file_name="metacloak_vk"
 round=final
 INSTANCE_DIR_CHECK="$OUTPUT_DIR/noise-ckpt/${round}"
+echo "exp_path_is:"
+echo $INSTANCE_DIR_CHECK
+
 
 # defense_sample_num
 if [ -z "$defense_sample_num" ]; then 

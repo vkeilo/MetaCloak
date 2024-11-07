@@ -56,6 +56,7 @@ from transformers import AutoTokenizer, PretrainedConfig
 from robust_facecloak.generic.data_utils import jpeg_compress_image
 # vkeilo add it
 import wandb
+import pickle
 
 # Will error if the minimal version of diffusers is not installed. Remove at your own risks.
 check_min_version("0.13.0.dev0")
@@ -204,6 +205,21 @@ def parse_args(input_args=None):
         type=float,
         default=1.0,
         help="The poison rate for training."
+    )
+    # vkeilo add it
+    parser.add_argument(
+        "--select_model_index",
+        type=int,
+        default=0,
+        help="use model index"
+    )
+
+    # vkeilo add it
+    parser.add_argument(
+        "--attack_mode",
+        type=str,
+        default="pgd",
+        help="use model index"
     )
     
     # clean_img_dir
@@ -677,6 +693,21 @@ def main(args):
         if args.train_text_encoder:
             text_encoder.gradient_checkpointing_enable()
 
+
+    # vkeilo add it
+    if args.attack_mode == "select_com":
+        init_model_state_pool_pth_path = "/data/home/yekai/github/mypro/MetaCloak/robust_facecloak/attacks/algs/tmpdata/init_model_state_pool_sd2-1.pth"
+        use_model_index = args.select_model_index
+        if use_model_index != -1:
+            split_step_dict = {0:0,1:199,2:399,3:599,4:799,5:999}
+            split_step = split_step_dict[use_model_index]
+            print(f"use model {use_model_index}")
+            with open(init_model_state_pool_pth_path, 'rb') as f:
+                model_pth_dict = pickle.load(f)
+                step2state_dict = model_pth_dict[0]
+                unet.load_state_dict(step2state_dict[split_step]["unet"])
+                text_encoder.load_state_dict(step2state_dict[split_step]["text_encoder"])
+
     # Check that all trainable models are in full precision
     low_precision_error_string = (
         "Please make sure to always have all model weights in full float32 precision when starting training - even if"
@@ -1081,6 +1112,7 @@ def main(args):
                         tracker.log(prompt2scorelist)
                         # log a mean 
                         prompt_list = list(prompt2scorelist.keys())
+                        # print(f"from {prompt_list} select eval prompt:{prompt_list[0]}")
                         k_list = list(prompt2scorelist[prompt_list[0]].keys())
                         for k in k_list:
                             means = []
