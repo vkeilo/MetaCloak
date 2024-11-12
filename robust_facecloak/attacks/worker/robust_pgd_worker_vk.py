@@ -237,6 +237,7 @@ class RobustPGDAttacker():
             for _sample in range(self.sample_num):
                 print(f'\t\tdefender{_sample}/{self.sample_num} sample perturb')
                 # 模拟微调训练方对图像进行一定变换以缓解毒性
+                # print(f'before trans x is:{x} ')
                 def_x_trans = self.transform(x).to(device, dtype=weight_dtype)
                 # 获得被进一步对抗扰动后的样本adv_x
                 adv_x = self.attacker.perturb(

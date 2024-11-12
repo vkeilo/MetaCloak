@@ -28,7 +28,7 @@ def generate_combinations(base_params, repeat_times=1):
     return experiments
 
 # Define the possible values for each parameter
-test_lable = "NOroubustPANtest"
+test_lable = "PAN_best_1200test_Linfty_s1"
 params_options = {
     "MODEL_ROOT": ["${ADB_PROJECT_ROOT}"],
     "gen_model_path": ["${MODEL_ROOT}/SD/stable-diffusion-2-1-base"],
@@ -37,19 +37,19 @@ params_options = {
     ],
     "model_select_mode":["order"],
     "wandb_project_name": ["metacloak_PAN"],
-    "mixed_precision": ["bf16"],
+    "mixed_precision": ["fp16"],
     "advance_steps": [2],
     "total_trail_num": [4],
     "total_train_steps": [1000],
-    "total_gan_step":[120],
+    "total_gan_step":[1200],
     "interval": [200],
     "dreambooth_training_steps": [1000],
     "unroll_steps": [1],
     "defense_sample_num": [1],
-    "defense_pgd_step_num": [1],
+    "defense_pgd_step_num": [6],
     "sampling_times_delta": [1],
     "sampling_times_theta": [1],
-    "attack_pgd_step_num": [1],
+    "attack_pgd_step_num": [0],
     "attack_pgd_radius": [7],
     "r": [11],
     "SGLD_method": ["noSGLD"],
@@ -57,17 +57,17 @@ params_options = {
     "eval_gen_img_num": [16],
     "attack_mode": ["pan"],
     "pan_lambda_D": [0],
-    "pan_lambda_S": [0],  # Multiple values for pan_lambda_S
+    "pan_lambda_S": [1],  # Multiple values for pan_lambda_S
     "pan_omiga": [1],
     "pan_k": [2],  # Multiple values for pan_k
     "pan_mode": ["S"],
     "pan_use_val": ["last"],
-    "img_save_interval":[5],
+    "img_save_interval":[15],
     "select_model_index":[1]
 }
 
 # Number of times to repeat each configuration
-repeat_times = 1
+repeat_times = 3
 
 # Generate all combinations
 experiments = generate_combinations(params_options, repeat_times=repeat_times)

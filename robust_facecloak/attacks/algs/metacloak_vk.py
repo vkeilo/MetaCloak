@@ -735,8 +735,8 @@ def main(args):
     # 将所有变换组合起来，整合为一个Compose对象
     all_trans = train_aug + defense_transform + tensorize_and_normalize
     two_trans = train_aug + defense_transform
-    # all_trans = transforms.Compose(all_trans)
-    # two_trans = transforms.Compose(two_trans)
+    all_trans = transforms.Compose(all_trans)
+    two_trans = transforms.Compose(two_trans)
     
     
     from robust_facecloak.attacks.worker.robust_pgd_worker_vk import RobustPGDAttacker
@@ -804,6 +804,7 @@ def main(args):
             k = args.pan_k,
             mode = args.pan_mode,
             use_val = args.pan_use_val,
+            trans=two_trans,
             # attack = all_trans,
         )
     elif args.attack_mode in ['EOTpan','panrobust']:
@@ -1208,7 +1209,13 @@ def main(args):
     # 保存最后的结果
     save_image(perturbed_data, "final")
 
-    print(f"max pixel change:{find_max_pixel_change(perturbed_data, original_data)}")
+    print(f"max_noise_r {find_max_pixel_change(perturbed_data, original_data)}")
+    noise_L0 = get_L0(perturbed_data, original_data)
+    noise_L1 = get_L1(perturbed_data, original_data)
+    noise_p = get_change_p(perturbed_data, original_data)
+    print(f"noise_L0 {noise_L0:.2f}")
+    print(f"pix_change_mean {noise_L1:.2f}")
+    print(f"change_area_mean {noise_p*100:.2f}")
 
 def find_max_pixel_change(original_img, noisy_img):
     diff = torch.abs(original_img - noisy_img)
@@ -1217,6 +1224,28 @@ def find_max_pixel_change(original_img, noisy_img):
     max_change = torch.max(diff)
     
     return max_change.item()
+
+def get_L0(original_img, noisy_img):
+    diff = torch.abs(original_img - noisy_img)
+    diff_L0 = torch.sum(diff > 0, dim=(1, 2, 3))
+    # Find the maximum pixel difference
+    mean_L0 = torch.mean(diff_L0.float())
+    return mean_L0.item()
+
+def get_L1(original_img, noisy_img):
+    diff = torch.abs(original_img - noisy_img)
+    diff_L1 = torch.sum(diff, dim=(1, 2, 3))
+    mean_L1 = torch.mean(diff_L1.float())
+    return mean_L1.item()
+
+def get_change_p(original_img, noisy_img):
+    diff = torch.abs(original_img - noisy_img)
+    diff_L0_all = torch.sum(diff > 0, dim=(0, 1, 2, 3))
+    pix_num_all = original_img.shape[0] * original_img.shape[1] * original_img.shape[2] * original_img.shape[3]
+    change_p = diff_L0_all / pix_num_all
+    return change_p.item()
+
+
 if __name__ == "__main__":
     # 获取脚本传参
     args = parse_args()
