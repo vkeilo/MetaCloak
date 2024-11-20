@@ -53,7 +53,7 @@ if [ ! -d "$INSTANCE_DIR_CHECK" ]; then
     --defense_sample_num=$defense_sample_num \
     --defense_pgd_ascending \
     --attack_pgd_radius=$attack_pgd_radius \
-    --attack_pgd_step_size=1 \
+    --attack_pgd_step_size=$step_size \
     --attack_pgd_step_num=$attack_pgd_step_num \
     --mixed_precision=$mixed_precision \
     --sampling_times_theta=$sampling_times_theta \
@@ -74,6 +74,7 @@ if [ ! -d "$INSTANCE_DIR_CHECK" ]; then
     --model_select_mode=$model_select_mode \
     --total_gan_step=$total_gan_step \
     --img_save_interval=$img_save_interval \
+    --Ltype=$Ltype  \
     """
     
     if [ "$train_mode" = "gau" ]; then

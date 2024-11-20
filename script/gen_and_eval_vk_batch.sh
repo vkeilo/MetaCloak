@@ -46,7 +46,9 @@ cd $pwdd
 # elif [ $attack_mode == "pan" ]; then
 #     export wandb_run_name="MAT-PAN-${total_train_steps}-${interval}-${sampling_times_delta}-${sampling_times_theta}-x${defense_pgd_step_num}x${attack_pgd_step_num}-radius${r}-${SGLD_method}-robust${attack_pgd_radius}-${pan_lambda_S}-${pan_lambda_D}-${pan_omiga}-k=${pan_k}-use${pan_mode}-${pan_use_val}-${test_timestamp}"
 
-export step_size=$(echo "scale=2; $r/10" | bc); 
+# export step_size=$(echo "scale=2; $r/10" | bc); 
+# setp size应该一直为1.1
+# export step_size=1.1
 export gen_exp_name_prefix=$prefix_name_gen
 export prefix_name_train=$prefix_name_train
 export method_hyper_name=$method_name-$method_hyper

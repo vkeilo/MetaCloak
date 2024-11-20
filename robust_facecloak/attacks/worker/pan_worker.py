@@ -12,6 +12,7 @@ class PANAttacker():
         self.use_gau = True if args.gau_kernel_size > 0 else False
         self.omiga = omiga
         print(f"lambda_D: {lambda_D}, lambda_S: {lambda_S}, omiga: {omiga}")
+        print(f'use Ltype:{args.Ltype}')
         self.k = k
         self.alpha = (step_size)/(0.5*255)
         self.radius = (radius)/(0.5*255)
@@ -369,14 +370,25 @@ class PANAttacker():
         pix_num = per_data.shape[2] * per_data.shape[3]
         per_data_inr = torch.clamp(per_data - self.radius, min=0)
         # pertubation_linf = torch.max(self.get_Linfty_norm(per_data))
+        if 'L2' in self.args.Ltype:
+            L2_n = torch.mean(self.get_L2_norm(per_data_inr)**self.k)
+            result += L2_n
+        if 'L1' in self.args.Ltype:
+            L1_n = torch.mean(self.get_L1_norm(per_data)**self.k)
+            result += L1_n
+        if 'L0' in self.args.Ltype:
+            L0_rho = torch.mean(self.get_rho_norm(per_data).to(dtype=self.weight_dtype)**self.k)
+            result += L0_rho
         # L2_n = torch.mean(self.get_L2_norm(per_data_inr))
         # L1_n = torch.mean(self.get_L1_norm(per_data))
         # L0_rho = torch.mean(self.get_rho_norm(per_data).to(dtype=self.weight_dtype))
-        ciede2000_diff = self.get_ciede2000_diff(adv_image,ori_image)
+        if 'ciede2000' in self.args.Ltype:
+            ciede2000_diff = self.get_ciede2000_diff(adv_image,ori_image)
+            result += torch.sum(ciede2000_diff**self.k)
         # result += pertubation_linf
         # result += L2_n
         # result += L1_n
-        result += torch.sum(ciede2000_diff**self.k)
+
         # print(f'result: {result}')
         # result += L0_rho
         return result

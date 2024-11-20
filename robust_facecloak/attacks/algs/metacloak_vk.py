@@ -592,6 +592,14 @@ def parse_args():
         type=str,
         default="allSGLD",
     )
+
+    # vkeilo add it
+    # SGLD应用在哪里
+    parser.add_argument(
+        "--Ltype",
+        type=str,
+        default="",
+    )
     
     args = parser.parse_args()
     return args

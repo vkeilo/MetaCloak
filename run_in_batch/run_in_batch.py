@@ -3,6 +3,7 @@ import json
 import time
 import re
 import argparse
+import numpy as np
 
 def set_env_with_expansion(key, value):
     """
