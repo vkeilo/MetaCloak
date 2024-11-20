@@ -3,13 +3,15 @@ import torch
 import torch.nn.functional as F
 from copy import deepcopy
 from torch.cuda.amp import GradScaler
-
+from robust_facecloak.attacks.worker.differential_color_functions import rgb2lab_diff, ciede2000_diff
+import random
 class PANAttacker():
     def __init__(self, lambda_D=0.1, lambda_S=10, omiga=0.5, step_size=1, k=2, radius=11, args=None, x_range=[-1,1], steps=1, mode = "S", use_val = "last", trans = None):
         self.lambda_D = lambda_D
         self.lambda_S = lambda_S
         self.use_gau = True if args.gau_kernel_size > 0 else False
         self.omiga = omiga
+        print(f"lambda_D: {lambda_D}, lambda_S: {lambda_S}, omiga: {omiga}")
         self.k = k
         self.alpha = (step_size)/(0.5*255)
         self.radius = (radius)/(0.5*255)
@@ -32,6 +34,8 @@ class PANAttacker():
             mean=[-1]*3,
             std=[1/(0.5*255)]*3
         )
+        self.ciede_max = 2500
+        self.seed = random.randint(0, 2**32 - 1)
         self.gau_filter = transforms.GaussianBlur(kernel_size=args.gau_kernel_size,)
         if args.mixed_precision in ["fp32",'no']:
             self.weight_dtype = torch.float32
@@ -39,7 +43,10 @@ class PANAttacker():
             self.weight_dtype = torch.float16
         elif args.mixed_precision == "bf16":
             self.weight_dtype = torch.bfloat16
-        
+    
+    def update_seed(self):
+        self.seed = random.randint(0, 2**32 - 1)
+
     def attack(self, f, ori_image, vae, tokenizer, noise_scheduler):
         if self.noattack:
             print("attacker no need to defend")
@@ -123,6 +130,8 @@ class PANAttacker():
             # 提前看一步
             # use_pertubation_data_D, _, _ = self.update_pertubation_data_D(f, use_pertubation_data_D, ori_image, vae, tokenizer, noise_scheduler)
             # use_pertubation_data_S, _, _ = self.update_pertubation_S(f, use_pertubation_data_S, use_pertubation_data_D, ori_image, vae, tokenizer, noise_scheduler)  
+            print(f'use_pertubation_data_D - ori_image{self.get_Linfty_norm(use_pertubation_data_D - ori_image)}')
+            self.update_seed()
             use_pertubation_data_D, loss_D, D_grad = self.update_pertubation_data_D(f, use_pertubation_data_D, ori_image, vae, tokenizer, noise_scheduler)
             use_pertubation_data_S, loss_S, S_grad = self.update_pertubation_S(f, use_pertubation_data_S, use_pertubation_data_D, ori_image, vae, tokenizer, noise_scheduler)
             D_grad_list.append(D_grad.clone())
@@ -151,22 +160,22 @@ class PANAttacker():
         # pertubation_data_S = pertubation_data_S - self.alpha * S_grad
         pertubation_data_D = pertubation_data_D_in + tmp_noise_D
         pertubation_data_S = pertubation_data_S_in + tmp_noise_S
-        pertubation_data_D = self._clip_(pertubation_data_D, ori_image)
+        pertubation_data_D = self._clip_(pertubation_data_D, ori_image, mode="D")
         pertubation_data_S = self._clip_(pertubation_data_S, ori_image)
 
         assert self.mode in ["S", "D"]
         assert self.use_val in ["best", "last"]
-        print(f'pertubation_data_S_in-ori_image:{self.get_Linfty_norm(pertubation_data_S_in - ori_image)}')
+        # print(f'pertubation_data_S_in-ori_image:{self.get_Linfty_norm(pertubation_data_S_in - ori_image)}')
         if self.mode == "S":
             use_pertubation_data = pertubation_data_S 
             used_pertubation_data_in = pertubation_data_S_in
             loss = loss_S 
-            self.pertubation_S.add_(pertubation_data_S-pertubation_data_S_in)
         elif self.mode == "D":
             use_pertubation_data = pertubation_data_D
             used_pertubation_data_in = pertubation_data_D_in
             loss = loss_D 
-            self.pertubation_D.add_(pertubation_data_D-pertubation_data_D_in)
+        self.pertubation_S.add_(pertubation_data_S-pertubation_data_S_in)
+        self.pertubation_D.add_(pertubation_data_D-pertubation_data_D_in)
         use_pertubations = use_pertubation_data - ori_image
         # adding_noise = use_pertubation_data - ori_image
 
@@ -175,14 +184,16 @@ class PANAttacker():
         # use_pertubation_data = use_pertubation_data.detech_()
         append_noise = use_pertubation_data - used_pertubation_data_in
         result = use_pertubation_data.detach_()
+        result_D = pertubation_data_D.detach_()
         # normalizer = transforms.Normalize([0.5*255]*3,[0.5*255]*3) 逆变换)
         # print(f'before inv:{result[0]}')
         result_unnor = self.inv_normalizer(result)
+        result_D_unnor = self.inv_normalizer(result_D)
         # print(f'after inv:{result_unnor[0]}')
         print(f'append_noise:{self.get_Linfty_norm(append_noise)}')
-        return result_unnor, loss
+        return result_unnor, result_D_unnor, loss
 
-    def certi(self, models, adv_x, vae, noise_scheduler, input_ids, weight_dtype=None, target_tensor=None):
+    def certi(self, models, adv_x, vae, noise_scheduler, input_ids, weight_dtype=None, target_tensor=None,timesteps = None):
         unet, text_encoder = models
         unet.zero_grad()
         text_encoder.zero_grad()
@@ -192,8 +203,10 @@ class PANAttacker():
         adv_latens = adv_latens * vae.config.scaling_factor
         noise = torch.randn_like(adv_latens)
         bsz = adv_latens.shape[0]
-        timesteps = torch.randint(0, int(noise_scheduler.config.num_train_timesteps*self.time_select), (bsz,), device=adv_latens.device)
-        timesteps = timesteps.long()
+        if timesteps is None:
+            torch.manual_seed(self.seed)
+            timesteps = torch.randint(0, int(noise_scheduler.config.num_train_timesteps*self.time_select), (bsz,), device=adv_latens.device)
+            timesteps = timesteps.long()
         # print(f'noise:{noise[0]}')
         # print(f'adv_latens:{adv_latens[0]}')
         noisy_latents = noise_scheduler.add_noise(adv_latens, noise, timesteps)
@@ -229,19 +242,19 @@ class PANAttacker():
         torch.cuda.empty_cache()
         return loss
 
-    def get_loss_D(self, f, adv_image, ori_image, vae, tokenizer, noise_scheduler):
+    def get_loss_D(self, f, adv_image_tran, adv_image, ori_image, vae, tokenizer, noise_scheduler):
         input_ids = tokenizer(
             self.args.instance_prompt,
             truncation=True,
             padding="max_length",
             max_length=tokenizer.model_max_length,
             return_tensors="pt",
-        ).input_ids.repeat(len(adv_image), 1)
+        ).input_ids.repeat(len(adv_image_tran), 1)
 
-        loss_P = self.certi(f, adv_image, vae, noise_scheduler, input_ids, weight_dtype=self.weight_dtype)
+        loss_P = self.certi(f, adv_image_tran, vae, noise_scheduler, input_ids, weight_dtype=self.weight_dtype)
         # 取最大是否合适
         pertubation_linf = self.get_pertubation_linf(adv_image,ori_image)
-        loss = - loss_P + (self.lambda_D * torch.abs(pertubation_linf)**self.k)
+        loss = - loss_P + (self.lambda_D * torch.abs(pertubation_linf))
         return loss
 
     def update_pertubation_data_D(self, f, Ped_data_D, ori_image, vae, tokenizer, noise_scheduler):
@@ -264,7 +277,7 @@ class PANAttacker():
         adv_image_tran = self.trans(adv_image) if self.use_gau else adv_image
 
         # 计算损失
-        loss = self.get_loss_D(f, adv_image_tran, ori_image, vae, tokenizer, noise_scheduler)
+        loss = self.get_loss_D(f, adv_image_tran, adv_image, ori_image, vae, tokenizer, noise_scheduler)
         
         # 缩放损失并反向传播
         # scaler.scale(loss).backward()
@@ -277,7 +290,7 @@ class PANAttacker():
         # 继续更新
         grad_ml_alpha = self.alpha * adv_image.grad.sign()
         adv_image_new = adv_image - grad_ml_alpha
-        adv_image_new = self._clip_(adv_image_new, ori_image)
+        adv_image_new = self._clip_(adv_image_new, ori_image, mode="D")
         out_grad = adv_image.grad.sign().clone()
         torch.cuda.empty_cache()
         return adv_image_new, loss.item(), out_grad
@@ -302,7 +315,9 @@ class PANAttacker():
 
         loss_P_S = self.certi(f, adv_image_S_tran, vae, noise_scheduler, input_ids, weight_dtype=self.weight_dtype)
         loss_P_D = self.certi(f, adv_image_D_tran, vae, noise_scheduler, input_ids, weight_dtype=self.weight_dtype)
-
+        # if loss_P_D > loss_P_S and self.omiga > 0:
+        #     self.lambda_S = 1e-3/(loss_P_D.item()-loss_P_S.item())
+        #     print(f'update lambda_S: {self.lambda_S}')
         # 约束由Linfty更改为L3
         # pertubation_linf_S = torch.max(self.get_Linfty_norm(adv_image_S-ori_image))
         # print(f'adv_image_S: {adv_image_S}')
@@ -312,8 +327,8 @@ class PANAttacker():
         # print(f'lossPD: {loss_P_D}')
         # print(f'abs(lossPS - lossPD): {torch.abs(loss_P_S - loss_P_D)}')
         # print(f'pertubation_linf_S: {pertubation_linf_S}')
-        loss = - loss_P_S + self.lambda_S * (torch.abs(pertubation_linf_S)**self.k) + self.omiga * (torch.abs(loss_P_S - loss_P_D)**self.k)
-        print(f'loss_s compose: - loss_P_S{- loss_P_S},lambda_LP {self.lambda_S * (torch.abs(pertubation_linf_S)**self.k)}, omiga_diff{self.omiga * (torch.abs(loss_P_S - loss_P_D)**self.k):.8f}')
+        loss = - loss_P_S + self.lambda_S * (torch.abs(pertubation_linf_S)) + self.omiga * (torch.abs(loss_P_S - loss_P_D)**self.k)
+        print(f'loss_s compose: - loss_P_S{- loss_P_S},lambda_LP {self.lambda_S * (torch.abs(pertubation_linf_S))}, omiga_diff{self.omiga * (torch.abs(loss_P_S - loss_P_D)**self.k):.8f}')
         # loss.backward()
         # scaler.scale(loss).backward()
         loss.backward()
@@ -353,14 +368,15 @@ class PANAttacker():
         # print(f'per_data: {per_data[0][0]}')
         pix_num = per_data.shape[2] * per_data.shape[3]
         per_data_inr = torch.clamp(per_data - self.radius, min=0)
-        pertubation_linf = torch.max(self.get_Linfty_norm(per_data))
+        # pertubation_linf = torch.max(self.get_Linfty_norm(per_data))
         # L2_n = torch.mean(self.get_L2_norm(per_data_inr))
         # L1_n = torch.mean(self.get_L1_norm(per_data))
         # L0_rho = torch.mean(self.get_rho_norm(per_data).to(dtype=self.weight_dtype))
-
-        result += pertubation_linf
+        ciede2000_diff = self.get_ciede2000_diff(adv_image,ori_image)
+        # result += pertubation_linf
         # result += L2_n
         # result += L1_n
+        result += torch.sum(ciede2000_diff**self.k)
         # print(f'result: {result}')
         # result += L0_rho
         return result
@@ -370,6 +386,7 @@ class PANAttacker():
         max_pixels_per_image, _ = torch.max(abs_images, dim=3)
         max_pixels_per_image, _ = torch.max(max_pixels_per_image, dim=2)
         Linfty_norm, _ = torch.max(max_pixels_per_image, dim=1)
+        print(f'return Linfty_norm: {Linfty_norm}')
         return Linfty_norm
     
     def get_L1_norm(self, images):
@@ -390,7 +407,26 @@ class PANAttacker():
         L3_norm = torch.cbrt(torch.sum(abs_images ** 3, dim=[1, 2, 3]))
         return L3_norm
 
-    def _clip_(self, adv_x, x):
+    def get_ciede2000_diff(self,advimgs,ori_imgs):
+        device = torch.device('cuda')
+        ori_imgs_0_1 = (ori_imgs+1)/2
+        advimgs_0_1 = (advimgs+1)/2
+        advimgs_0_1.clamp_(0,1)
+        # print(f'ori_imgs_0_1.min:{ori_imgs_0_1.min()}, ori_imgs_0_1.max:{ori_imgs_0_1.max()}')
+        # print(f'advimgs_0_1.min:{advimgs_0_1.min()}, advimgs_0_1.max:{advimgs_0_1.max()}')
+        X_ori_LAB = rgb2lab_diff(ori_imgs_0_1,device)
+        advimgs_LAB = rgb2lab_diff(advimgs_0_1,device)
+        # print(f'advimgs: {advimgs}')
+        # print(f'ori_imgs: {ori_imgs}')
+        color_distance_map=ciede2000_diff(X_ori_LAB,advimgs_LAB,device)
+        # print(color_distance_map)
+        scores = torch.norm(color_distance_map.view(ori_imgs.shape[0],-1),dim=1)
+        print(f'scores: {scores}')
+        # mean_scores = torch.mean(scores)
+        # 100
+        return scores
+    
+    def _clip_(self, adv_x, x, mode = None):
         # print(f"clip to {x[0]}")
         adv_x = adv_x - x
         # if self.norm_type == 'l-infty':
@@ -398,7 +434,10 @@ class PANAttacker():
         #         adv_x.clamp_(-self.radius, self.radius)
         # else:
         #     raise NotImplementedError
-        adv_x.clamp_(-self.radius, self.radius)
+        if mode == "D":
+            adv_x.clamp_(-(11)/(0.5*255), (11)/(0.5*255))
+        else:
+            adv_x.clamp_(-self.radius, self.radius)
         adv_x = adv_x + x
         
         # if mode == 'S':

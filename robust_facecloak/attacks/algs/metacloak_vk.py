@@ -40,6 +40,8 @@ import utils
 import GPUtil
 import time
 import pickle
+from robust_facecloak.attacks.worker.differential_color_functions import rgb2lab_diff, ciede2000_diff
+
 
 logger = get_logger(__name__)
 
@@ -801,6 +803,7 @@ def main(args):
             x_range=[-1, 1],
             lambda_D = args.pan_lambda_D,
             lambda_S = args.pan_lambda_S,
+            omiga = args.pan_omiga,
             k = args.pan_k,
             mode = args.pan_mode,
             use_val = args.pan_use_val,
@@ -855,6 +858,8 @@ def main(args):
     ]
     # 此函数将保存经过扰动处理的图像数据到noise-ckpt/{id_stamp}目录中，id_stamp在此次实验中为迭代次数
     def save_image(perturbed_data, id_stamp):
+        if perturbed_data is None:
+            return
         save_folder = f"{args.output_dir}/noise-ckpt/{id_stamp}"
         os.makedirs(save_folder, exist_ok=True)
         noised_imgs = perturbed_data.detach()
@@ -947,6 +952,7 @@ def main(args):
     assert args.model_select_mode in ['order','min_loss']
     print(f"avalaible model num: {num_models},available steps: {str(steps_list)},total train step :{str(args.total_train_steps)}")
     # 如果是平均顺序选择模型池中的模型
+    perturbed_data_D = None
     if args.model_select_mode == 'order':
         for _ in range(args.total_trail_num):          
             # 针对每一个模型
@@ -976,7 +982,7 @@ def main(args):
                             if args.attack_mode in ["pgd","EOTpan","panrobust"]:
                                 perturbed_data,rubust_loss = defender.perturb(f, perturbed_data, original_data, vae, tokenizer, noise_scheduler,)
                             elif args.attack_mode in ["pan"]:
-                                perturbed_data,rubust_loss = attacker.attack(f, original_data, vae, tokenizer, noise_scheduler,)
+                                perturbed_data,perturbed_data_D,rubust_loss = attacker.attack(f, original_data, vae, tokenizer, noise_scheduler,)
                             wandb.log({"perturbedloss": rubust_loss})
                             # 此处引入随机梯度朗之万动力学
                             if args.SGLD_method == 'allSGLD' or args.SGLD_method == 'deltaSGLD':
@@ -1056,6 +1062,7 @@ def main(args):
                         # 每1000次扰动优化，保存一次扰动示例图像
                         if cnt % args.img_save_interval == 0:
                             save_image(perturbed_data, f"{cnt}")
+                            save_image(perturbed_data_D,f"{cnt}_D")
                     # frequently release the memory due to limited GPU memory, 
                     # env with more gpu might consider to remove the following lines for boosting speed
                     # 释放资源
@@ -1213,9 +1220,11 @@ def main(args):
     noise_L0 = get_L0(perturbed_data, original_data)
     noise_L1 = get_L1(perturbed_data, original_data)
     noise_p = get_change_p(perturbed_data, original_data)
+    ciede2000_score = get_ciede2000_diff(original_data, perturbed_data)
     print(f"noise_L0 {noise_L0:.2f}")
     print(f"pix_change_mean {noise_L1:.2f}")
     print(f"change_area_mean {noise_p*100:.2f}")
+    print(f"ciede2000_score {ciede2000_score:.2f}")
 
 def find_max_pixel_change(original_img, noisy_img):
     diff = torch.abs(original_img - noisy_img)
@@ -1245,6 +1254,24 @@ def get_change_p(original_img, noisy_img):
     change_p = diff_L0_all / pix_num_all
     return change_p.item()
 
+def get_ciede2000_diff(ori_imgs,advimgs):
+    device = torch.device('cuda')
+    ori_imgs_0_1 = ori_imgs/255
+    advimgs_0_1 = advimgs/255
+    advimgs_0_1.clamp_(0,1)
+    # print(f'ori_imgs_0_1.min:{ori_imgs_0_1.min()}, ori_imgs_0_1.max:{ori_imgs_0_1.max()}')
+    # print(f'advimgs_0_1.min:{advimgs_0_1.min()}, advimgs_0_1.max:{advimgs_0_1.max()}')
+    X_ori_LAB = rgb2lab_diff(ori_imgs_0_1,device)
+    advimgs_LAB = rgb2lab_diff(advimgs_0_1,device)
+    # print(f'advimgs: {advimgs}')
+    # print(f'ori_imgs: {ori_imgs}')
+    color_distance_map=ciede2000_diff(X_ori_LAB,advimgs_LAB,device)
+    # print(color_distance_map)
+    scores = torch.norm(color_distance_map.view(ori_imgs.shape[0],-1),dim=1)
+    print(f'scores: {scores}')
+    # mean_scores = torch.mean(scores)
+    # 100
+    return torch.mean(scores)
 
 if __name__ == "__main__":
     # 获取脚本传参
