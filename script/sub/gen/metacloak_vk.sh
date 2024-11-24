@@ -75,6 +75,9 @@ if [ ! -d "$INSTANCE_DIR_CHECK" ]; then
     --total_gan_step=$total_gan_step \
     --img_save_interval=$img_save_interval \
     --Ltype=$Ltype  \
+    --radius_d=$rd  \
+    --max_L=$max_L  \
+    --min_L=$min_L  \
     """
     
     if [ "$train_mode" = "gau" ]; then

@@ -594,13 +594,35 @@ def parse_args():
     )
 
     # vkeilo add it
-    # SGLD应用在哪里
+    # 正则化方法
     parser.add_argument(
         "--Ltype",
         type=str,
         default="",
     )
-    
+    # vkeilo add it
+    # rd
+    parser.add_argument(
+        "--radius_d",
+        type=int,
+        default=11,
+    )
+    # vkeilo add it
+    # 
+    parser.add_argument(
+        "--max_L",
+        type=float,
+        default=None,
+    )
+    # vkeilo add it
+    # 
+    parser.add_argument(
+        "--min_L",
+        type=float,
+        default=None,
+    )
+
+
     args = parser.parse_args()
     return args
 

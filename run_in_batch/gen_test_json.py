@@ -57,7 +57,7 @@ def generate_lin_interval_list(start, end, num):
     return np.linspace(start, end, num=num).tolist()
 
 # Define the possible values for each parameter
-test_lable = "PAN_r11rd11_ciede2000_s8e-8~12e-8_omiga200~500_sameseed"
+test_lable = "PAN_r11rd11_ciede2000_1500to2000_s4e-7d0_omiga0.1082636733874054_dynamic_lambdas"
 params_options = {
     "MODEL_ROOT": ["${ADB_PROJECT_ROOT}"],
     "gen_model_path": ["${MODEL_ROOT}/SD/stable-diffusion-2-1-base"],
@@ -73,6 +73,7 @@ params_options = {
     "total_gan_step":[120],
     "interval": [200],
     "dreambooth_training_steps": [1000],
+    "step_size": [1],
     "unroll_steps": [1],
     "defense_sample_num": [1],
     "defense_pgd_step_num": [6],
@@ -80,19 +81,24 @@ params_options = {
     "sampling_times_theta": [1],
     "attack_pgd_step_num": [0],
     "attack_pgd_radius": [7],
-    "r": [40],
+    "r": [11],
+    "rd": [11],
     "SGLD_method": ["noSGLD"],
     "gauK": [7],
     "eval_gen_img_num": [16],
     "attack_mode": ["pan"],
     "pan_lambda_D": [0],
-    "pan_lambda_S": [8e-8,1e-7,12e-8],  # Multiple values for pan_lambda_S
-    "pan_omiga": "log:200:500:5",
+    "pan_lambda_S": [4e-7],  # Multiple values for pan_lambda_S
+    # "pan_omiga": [316.23],
+    "pan_omiga": [0.1082636733874054],
     "pan_k": [2],  # Multiple values for pan_k
     "pan_mode": ["S"],
     "pan_use_val": ["last"],
-    "img_save_interval":[10],
-    "select_model_index":[1]
+    "img_save_interval":[100],
+    "select_model_index":[1],
+    "Ltype":['ciede2000'],
+    "max_L": [2000],
+    "min_L": [1500],
 }
 
 # Number of times to repeat each configuration

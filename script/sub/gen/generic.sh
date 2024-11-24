@@ -24,4 +24,4 @@ export OUTPUT_DIR="$ADB_PROJECT_ROOT/exp_data-$test_timestamp/gen_output/$gen_ex
 mkdir -p $OUTPUT_DIR
 cp -r $CLEAN_REF $OUTPUT_DIR/image_clean_ref
 cp -r $CLEAN_ADV_DIR $OUTPUT_DIR/image_before_addding_noise
-export step_size=$(echo "scale=2; $r/10" | bc)
+# export step_size=$(echo "scale=2; $r/10" | bc)

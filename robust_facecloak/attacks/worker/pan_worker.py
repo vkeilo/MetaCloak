@@ -11,11 +11,14 @@ class PANAttacker():
         self.lambda_S = lambda_S
         self.use_gau = True if args.gau_kernel_size > 0 else False
         self.omiga = omiga
-        print(f"lambda_D: {lambda_D}, lambda_S: {lambda_S}, omiga: {omiga}")
-        print(f'use Ltype:{args.Ltype}')
         self.k = k
         self.alpha = (step_size)/(0.5*255)
-        self.radius = (radius)/(0.5*255)
+        self.radius = (radius-0.25)/(0.5*255)
+        self.radius_d = (args.radius_d-0.25)/(0.5*255)
+        print(f"lambda_D: {lambda_D}, lambda_S: {lambda_S}, omiga: {omiga}")
+        print(f'use Ltype:{args.Ltype}')
+        print(f'r:{radius},rd:{args.radius_d}')
+        print(f'max_L:{args.max_L},min_L:{args.min_L}')
         self.random_start = args.attack_pgd_random_start
         self.weight_dtype = torch.bfloat16  # 默认类型
         self.left = x_range[0]
@@ -38,6 +41,8 @@ class PANAttacker():
         self.ciede_max = 2500
         self.seed = random.randint(0, 2**32 - 1)
         self.gau_filter = transforms.GaussianBlur(kernel_size=args.gau_kernel_size,)
+        self.step_cnt = 0
+        self.device = torch.device("cuda")
         if args.mixed_precision in ["fp32",'no']:
             self.weight_dtype = torch.float32
         elif args.mixed_precision == "fp16":
@@ -116,6 +121,7 @@ class PANAttacker():
         tmp_noise_D = torch.zeros_like(ori_image).to(device,dtype=self.weight_dtype)
         tmp_noise_S = torch.zeros_like(ori_image).to(device,dtype=self.weight_dtype)
         for i in range(self.steps):
+            self.step_cnt+=1
             # if self.use_gau == True:
             #     # print(f'before trans:{pertubation_data_S_in[0]}')
             #     use_pertubation_data_D = self.trans(pertubation_data_D_in).to(device, dtype=self.weight_dtype) + tmp_noise_D
@@ -131,7 +137,7 @@ class PANAttacker():
             # 提前看一步
             # use_pertubation_data_D, _, _ = self.update_pertubation_data_D(f, use_pertubation_data_D, ori_image, vae, tokenizer, noise_scheduler)
             # use_pertubation_data_S, _, _ = self.update_pertubation_S(f, use_pertubation_data_S, use_pertubation_data_D, ori_image, vae, tokenizer, noise_scheduler)  
-            print(f'use_pertubation_data_D - ori_image{self.get_Linfty_norm(use_pertubation_data_D - ori_image)}')
+            # print(f'use_pertubation_data_D - ori_image{self.get_Linfty_norm(use_pertubation_data_D - ori_image)}')
             self.update_seed()
             use_pertubation_data_D, loss_D, D_grad = self.update_pertubation_data_D(f, use_pertubation_data_D, ori_image, vae, tokenizer, noise_scheduler)
             use_pertubation_data_S, loss_S, S_grad = self.update_pertubation_S(f, use_pertubation_data_S, use_pertubation_data_D, ori_image, vae, tokenizer, noise_scheduler)
@@ -272,6 +278,9 @@ class PANAttacker():
         # # del f
         # torch.cuda.empty_cache()
         # return adv_image_new, loss.item()
+        if self.lambda_D == 0 and self.omiga == 0:
+            print(f'pan_lambda_D is 0, no need to update pertubation_data_D')
+            return Ped_data_D,0,torch.zeros_like(Ped_data_D)
         scaler = GradScaler()
         adv_image = Ped_data_D.clone().detach() 
         adv_image.requires_grad = True
@@ -323,6 +332,30 @@ class PANAttacker():
         # pertubation_linf_S = torch.max(self.get_Linfty_norm(adv_image_S-ori_image))
         # print(f'adv_image_S: {adv_image_S}')
         pertubation_linf_S = self.get_pertubation_linf(adv_image_S,ori_image)
+        # if pertubation_linf_S > 21160000:
+        #     self.lambda_S = self.lambda_S * 1.1
+        #     print(f'update lambda_S: {self.lambda_S}')
+        # if pertubation_linf_S < 14440000:
+        #     self.lambda_S = self.lambda_S * 0.9
+        #     print(f'update lambda_S: {self.lambda_S}')
+        if self.step_cnt%5==0 and (self.args.max_L != 0 or self.args.min_L != 0):
+            if pertubation_linf_S > self.args.max_L**self.k:
+                self.lambda_S = self.lambda_S * 2
+                print(f'update lambda_S: {self.lambda_S}')
+                # self.omiga = self.omiga * 0.5
+                # print(f'update omiga: {self.omiga}')
+            if pertubation_linf_S < self.args.min_L**self.k:
+                self.lambda_S = self.lambda_S * 0.8
+                print(f'update lambda_S: {self.lambda_S}')
+                # self.omiga = self.omiga * 1.2
+                # print(f'update omiga: {self.omiga}')
+        # if self.step_cnt%5==0:
+        #     if pertubation_linf_S > 21160000:
+        #         self.omiga = self.omiga * 0.5
+        #         print(f'update omiga: {self.omiga}')
+        #     if pertubation_linf_S < 14440000:
+        #         self.omiga = self.omiga * 1.2
+        #         print(f'update omiga: {self.omiga}')
         # pertubation_linf_S = self.get_L3_norm(adv_image_S - ori_image)
         # print(f'lossPS: {loss_P_S}')
         # print(f'lossPD: {loss_P_D}')
@@ -364,7 +397,7 @@ class PANAttacker():
     def get_pertubation_linf(self, adv_image,ori_image,mode = None):
         # if mode == "S":
             # pertubation_linf = torch.max(self.get_Linfty_norm(adv_image-ori_image))
-        result = 0
+        result = torch.tensor(0.0, device=self.device)
         per_data = adv_image-ori_image
         # print(f'per_data: {per_data[0][0]}')
         pix_num = per_data.shape[2] * per_data.shape[3]
@@ -384,7 +417,7 @@ class PANAttacker():
         # L0_rho = torch.mean(self.get_rho_norm(per_data).to(dtype=self.weight_dtype))
         if 'ciede2000' in self.args.Ltype:
             ciede2000_diff = self.get_ciede2000_diff(adv_image,ori_image)
-            result += torch.sum(ciede2000_diff**self.k)
+            result += torch.mean(ciede2000_diff**self.k)
         # result += pertubation_linf
         # result += L2_n
         # result += L1_n
@@ -440,6 +473,8 @@ class PANAttacker():
     
     def _clip_(self, adv_x, x, mode = None):
         # print(f"clip to {x[0]}")
+        adv_x.to(dtype=torch.float32)
+        x.to(dtype=torch.float32)
         adv_x = adv_x - x
         # if self.norm_type == 'l-infty':
         #     if mode == 'S':
@@ -454,5 +489,6 @@ class PANAttacker():
         
         # if mode == 'S':
         adv_x.clamp_(self.left, self.right)
+        adv_x = adv_x.to(dtype=self.weight_dtype)
         # adv_x.clamp_(self.left, self.right)
         return adv_x
