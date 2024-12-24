@@ -76,8 +76,11 @@ if [ ! -d "$INSTANCE_DIR_CHECK" ]; then
     --img_save_interval=$img_save_interval \
     --Ltype=$Ltype  \
     --radius_d=$rd  \
-    --max_L=$max_L  \
+    --max_L=$((min_L+interval_L))  \
     --min_L=$min_L  \
+    --hpara_update_interval=$hpara_update_interval \
+    --dynamic_mode=$dynamic_mode \
+    --omiga_strength=$omiga_strength \
     """
     
     if [ "$train_mode" = "gau" ]; then

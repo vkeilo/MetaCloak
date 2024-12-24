@@ -328,7 +328,7 @@ def parse_args():
     # 攻击 PGD 的步长（每一步的扰动大小）
     parser.add_argument(
         "--attack_pgd_step_size",
-        type=int,
+        type=float,
         default=1,
         help="The step size for attack pgd.",
     )
@@ -621,8 +621,27 @@ def parse_args():
         type=float,
         default=None,
     )
-
-
+    # vkeilo add it
+    # 
+    parser.add_argument(
+        "--hpara_update_interval",
+        type=int,
+        default=5,
+    )
+    # vkeilo add it
+    # 
+    parser.add_argument(
+        "--dynamic_mode",
+        type=str,
+        default="",
+    )
+    # vkeilo add it
+    # 
+    parser.add_argument(
+        "--omiga_strength",
+        type=float,
+        default="1",
+    )
     args = parser.parse_args()
     return args
 
@@ -733,6 +752,7 @@ def main(args):
         # size=args.resolution,
         # center_crop=args.center_crop,
     )
+    # save array: perturbed_data to file
     
     # original_data当前为原始扰动数据
     original_data= copy.deepcopy(perturbed_data)
@@ -902,7 +922,7 @@ def main(args):
             Image.fromarray(
                 img_pixel.float().detach().cpu().permute(1, 2, 0).numpy().squeeze().astype(np.uint8)
             ).save(save_path)
-
+    save_image(perturbed_data, "load")
     
     init_model_state_pool = {}
     pbar = tqdm(total=num_models, desc="initializing models")
@@ -1144,7 +1164,7 @@ def main(args):
                 if args.attack_mode in ["pgd","EOTpan","panrobust"]:
                     perturbed_data,rubust_loss = defender.perturb(f, perturbed_data, original_data, vae, tokenizer, noise_scheduler,)
                 elif args.attack_mode in ["pan"]:
-                    perturbed_data,rubust_loss = attacker.attack(f, perturbed_data, original_data, vae, tokenizer, noise_scheduler,)
+                    perturbed_data,perturbed_data_D,rubust_loss = attacker.attack(f, original_data, vae, tokenizer, noise_scheduler,)
                 wandb.log({"perturbedloss": rubust_loss})
                 # 此处引入随机梯度朗之万动力学
                 if args.SGLD_method == 'allSGLD' or args.SGLD_method == 'deltaSGLD':

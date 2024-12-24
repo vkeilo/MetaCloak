@@ -57,7 +57,7 @@ def generate_lin_interval_list(start, end, num):
     return np.linspace(start, end, num=num).tolist()
 
 # Define the possible values for each parameter
-test_lable = "PAN_r11rd11_ciede2000_1500to2000_s4e-7d0_omiga0.1082636733874054_dynamic_lambdas"
+test_lable = "PAN_r8to11rd11_ciede2000_900p1100p1300p1500_s4e-7d0_omiga013_omigas1e-5to5e-5x5_Lpm_20241212_part3"
 params_options = {
     "MODEL_ROOT": ["${ADB_PROJECT_ROOT}"],
     "gen_model_path": ["${MODEL_ROOT}/SD/stable-diffusion-2-1-base"],
@@ -81,7 +81,7 @@ params_options = {
     "sampling_times_theta": [1],
     "attack_pgd_step_num": [0],
     "attack_pgd_radius": [7],
-    "r": [11],
+    "r": [8,9,10,11],
     "rd": [11],
     "SGLD_method": ["noSGLD"],
     "gauK": [7],
@@ -90,19 +90,25 @@ params_options = {
     "pan_lambda_D": [0],
     "pan_lambda_S": [4e-7],  # Multiple values for pan_lambda_S
     # "pan_omiga": [316.23],
-    "pan_omiga": [0.1082636733874054],
+    # 0.13894954943731375
+    "pan_omiga": [0.13894954943731375],
     "pan_k": [2],  # Multiple values for pan_k
     "pan_mode": ["S"],
     "pan_use_val": ["last"],
     "img_save_interval":[100],
     "select_model_index":[1],
     "Ltype":['ciede2000'],
-    "max_L": [2000],
-    "min_L": [1500],
+    "interval_L": [300],
+    "min_L": [900,1100,1300,1500],
+    "train_mode": ["gau"],
+    "eval_mode": ["gau"],
+    "hpara_update_interval":[5],
+    "dynamic_mode":['L+m'],
+    "omiga_strength": "lin:1e-5:5e-5:5",
 }
 
 # Number of times to repeat each configuration
-repeat_times = 5
+repeat_times = 3
 
 
 for key, value in params_options.items():

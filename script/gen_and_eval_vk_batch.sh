@@ -22,7 +22,7 @@ export dataset_name=VGGFace2-clean # for the Cele, change it to CelebA-HQ-clean
 # support method name: metacloak, clean
 export method_select=metacloak
 # the training mode, can be std or gau
-export train_mode=gau 
+# export train_mode=gau
 # if gau is selected, the gauK is the kernel size of guassian filter 
 # export gauK=7
 # export eval_gen_img_num=16 # the number of images to generate per prompt 

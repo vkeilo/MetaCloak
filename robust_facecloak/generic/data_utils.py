@@ -30,6 +30,7 @@ def load_data(data_dir,):
         return np.array(image).astype(np.uint8)
     # more robust loading to avoid loaing non-image files
     images = [] 
+    # for i in sorted(Path(data_dir).iterdir(), key=lambda x: str(x)):
     for i in list(Path(data_dir).iterdir()):
         if not i.suffix in [".jpg", ".png", ".jpeg"]:
             continue

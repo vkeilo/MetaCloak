@@ -8,17 +8,24 @@ import random
 class PANAttacker():
     def __init__(self, lambda_D=0.1, lambda_S=10, omiga=0.5, step_size=1, k=2, radius=11, args=None, x_range=[-1,1], steps=1, mode = "S", use_val = "last", trans = None):
         self.lambda_D = lambda_D
-        self.lambda_S = lambda_S
+        self.lambda_S = torch.tensor(lambda_S, requires_grad=True)
+        self.lambda_S_rate = lambda_S * 1e-1
         self.use_gau = True if args.gau_kernel_size > 0 else False
-        self.omiga = omiga
+        self.omiga = torch.tensor(omiga, requires_grad=True)
+        self.omiga_rate = omiga * 1e-1
+        self.hpara_update_interval = args.hpara_update_interval
         self.k = k
         self.alpha = (step_size)/(0.5*255)
         self.radius = (radius-0.25)/(0.5*255)
         self.radius_d = (args.radius_d-0.25)/(0.5*255)
+        self.dynamic_mode = args.dynamic_mode
+        assert self.dynamic_mode in ['L_only',"multi","L+m",""]
         print(f"lambda_D: {lambda_D}, lambda_S: {lambda_S}, omiga: {omiga}")
         print(f'use Ltype:{args.Ltype}')
         print(f'r:{radius},rd:{args.radius_d}')
         print(f'max_L:{args.max_L},min_L:{args.min_L}')
+        print(f'dynamic_mode:{self.dynamic_mode}')
+        print(f'hpara_update_interval:{self.hpara_update_interval}')
         self.random_start = args.attack_pgd_random_start
         self.weight_dtype = torch.bfloat16  # 默认类型
         self.left = x_range[0]
@@ -38,7 +45,8 @@ class PANAttacker():
             mean=[-1]*3,
             std=[1/(0.5*255)]*3
         )
-        self.ciede_max = 2500
+        
+        # self.ciede_max = 2500
         self.seed = random.randint(0, 2**32 - 1)
         self.gau_filter = transforms.GaussianBlur(kernel_size=args.gau_kernel_size,)
         self.step_cnt = 0
@@ -49,7 +57,6 @@ class PANAttacker():
             self.weight_dtype = torch.float16
         elif args.mixed_precision == "bf16":
             self.weight_dtype = torch.bfloat16
-    
     def update_seed(self):
         self.seed = random.randint(0, 2**32 - 1)
 
@@ -338,34 +345,34 @@ class PANAttacker():
         # if pertubation_linf_S < 14440000:
         #     self.lambda_S = self.lambda_S * 0.9
         #     print(f'update lambda_S: {self.lambda_S}')
-        if self.step_cnt%5==0 and (self.args.max_L != 0 or self.args.min_L != 0):
-            if pertubation_linf_S > self.args.max_L**self.k:
-                self.lambda_S = self.lambda_S * 2
-                print(f'update lambda_S: {self.lambda_S}')
-                # self.omiga = self.omiga * 0.5
-                # print(f'update omiga: {self.omiga}')
-            if pertubation_linf_S < self.args.min_L**self.k:
-                self.lambda_S = self.lambda_S * 0.8
-                print(f'update lambda_S: {self.lambda_S}')
+        # if self.step_cnt%5==0 and (self.args.max_L != 0 or self.args.min_L != 0):
+        #     if pertubation_linf_S > self.args.max_L**self.k:
+        #         self.lambda_S = self.lambda_S * 2
+        #         print(f'update lambda_S: {self.lambda_S}')
+        #         # self.omiga = self.omiga * 0.5
+        #         # print(f'update omiga: {self.omiga}')
+        #     if pertubation_linf_S < self.args.min_L**self.k:
+        #         self.lambda_S = self.lambda_S * 0.8
+        #         print(f'update lambda_S: {self.lambda_S}')
                 # self.omiga = self.omiga * 1.2
                 # print(f'update omiga: {self.omiga}')
-        # if self.step_cnt%5==0:
-        #     if pertubation_linf_S > 21160000:
-        #         self.omiga = self.omiga * 0.5
-        #         print(f'update omiga: {self.omiga}')
-        #     if pertubation_linf_S < 14440000:
-        #         self.omiga = self.omiga * 1.2
-        #         print(f'update omiga: {self.omiga}')
-        # pertubation_linf_S = self.get_L3_norm(adv_image_S - ori_image)
         # print(f'lossPS: {loss_P_S}')
         # print(f'lossPD: {loss_P_D}')
         # print(f'abs(lossPS - lossPD): {torch.abs(loss_P_S - loss_P_D)}')
         # print(f'pertubation_linf_S: {pertubation_linf_S}')
-        loss = - loss_P_S + self.lambda_S * (torch.abs(pertubation_linf_S)) + self.omiga * (torch.abs(loss_P_S - loss_P_D)**self.k)
-        print(f'loss_s compose: - loss_P_S{- loss_P_S},lambda_LP {self.lambda_S * (torch.abs(pertubation_linf_S))}, omiga_diff{self.omiga * (torch.abs(loss_P_S - loss_P_D)**self.k):.8f}')
-        # loss.backward()
-        # scaler.scale(loss).backward()
+        loss_con = torch.abs(pertubation_linf_S)
+        loss_diff = torch.abs(loss_P_S - loss_P_D)**self.k
+        # loss = - loss_P_S + self.lambda_S * loss_con + self.omiga * loss_diff
+        if self.args.dynamic_mode in ['L+m','multi']:
+            loss = - loss_P_S + self.lambda_S * loss_con + self.omiga * loss_diff - 0.5 * torch.log(self.lambda_S) - 0.5 * self.args.omiga_strength * torch.log(self.omiga)
+        else:
+            loss = - loss_P_S + self.lambda_S * loss_con + self.omiga * loss_diff
+        print(f'loss_s compose: - loss_P_S:{- loss_P_S},lambda_LP:{self.lambda_S * loss_con}, omiga_diff:{(self.omiga * loss_diff):.8f}')
+
         loss.backward()
+        self.update_lambda_S(pertubation_linf_S)
+        self.update_omiga()
+        
         # print("Gradient of adv_image_S:", adv_image_S.grad)
         # print(f'grad:{self.alpha * pertubation_S.grad.sign()[0]}')
         # print(f'now pertubation_S: {pertubation_S[0]}')
@@ -390,6 +397,8 @@ class PANAttacker():
         # adv_image_S_new = adv_image_S_new.detach()
         # print(f'new pertubation_S: {pertubation_S[2]}')
         out_grad = adv_image_S.grad.sign().clone()
+        # 清空loss的梯度
+        
         torch.cuda.empty_cache()
         # print(f"new per max val is {self.get_Linfty_norm(adv_image_S_new - ori_image)}")
         return adv_image_S_new, loss.item(),out_grad
@@ -471,6 +480,38 @@ class PANAttacker():
         # 100
         return scores
     
+
+    def update_lambda_S(self,pertubation_linf_S):
+        if self.dynamic_mode == "L_only" or self.dynamic_mode == "L+m":
+            if self.step_cnt%self.hpara_update_interval==0 and (self.args.max_L != 0 or self.args.min_L != 0):
+                if pertubation_linf_S > self.args.max_L**self.k:
+                    self.lambda_S = self.lambda_S * 2
+                    print(f'update lambda_S: {self.lambda_S}')
+                    # self.omiga = self.omiga * 0.5
+                    # print(f'update omiga: {self.omiga}')
+                if pertubation_linf_S < self.args.min_L**self.k:
+                    self.lambda_S = self.lambda_S * 0.8
+                    print(f'update lambda_S: {self.lambda_S}')
+                self.lambda_S = self.lambda_S.detach()
+                self.lambda_S.requires_grad=True
+        if self.dynamic_mode == "multi":
+            grad_ml_lambda = self.lambda_S_rate * self.lambda_S.grad.sign()
+            self.lambda_S = self.lambda_S - grad_ml_lambda
+            self.lambda_S = self.lambda_S.detach()
+            self.lambda_S.requires_grad=True
+            print(f'update lambda_S: {self.lambda_S}')
+            self.lambda_S_rate = self.lambda_S * 0.1
+
+    def update_omiga(self):
+        if self.dynamic_mode == "multi" or self.dynamic_mode == "L+m":
+            # if self.step_cnt%self.hpara_update_interval==0:
+            grad_ml_omiga = self.omiga_rate * self.omiga.grad.sign()
+            self.omiga = self.omiga - grad_ml_omiga
+            self.omiga = self.omiga.detach()
+            self.omiga.requires_grad=True
+            print(f'update omiga: {self.omiga}')
+            self.omiga_rate = self.omiga * 0.1
+
     def _clip_(self, adv_x, x, mode = None):
         # print(f"clip to {x[0]}")
         adv_x.to(dtype=torch.float32)
