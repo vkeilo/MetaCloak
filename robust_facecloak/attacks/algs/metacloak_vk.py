@@ -940,7 +940,7 @@ def main(args):
         f_ori = [unet, text_encoder]
         # 得到训练total_train_steps步之后的unet, text_encoder参数以及中间状态参数
         # print('start train few 702')
-        if args.init_model_state_pool_pth_path is None:
+        if args.init_model_state_pool_pth_path in [None,'None']:
             f_ori, step2state_dict = train_few_step(
                     args,
                     f_ori,
