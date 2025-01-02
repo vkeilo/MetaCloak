@@ -43,7 +43,7 @@ def test_one_args(args,test_lable):
     run_name = os.getenv("wandb_run_name")
     print(f"run_name: {run_name}")
     os.system(f"nohup bash script/gen_and_eval_vk_batch.sh > output_{run_name}.log 2>&1")
-    check_file_for_pattern(f"output_{run_name}.log","find function last")
+    check_file_for_pattern(f"output_{run_name}.log","exp finished")
     # rename dir exp_data to exp_data_{run_name}
     # check dir exp_datas_output exist
     if not os.path.exists("exp_datas_output"):

@@ -70,5 +70,7 @@ bash ./sub/gen/$gen_file_name
 # evaluate the noise with dreambooth training
 bash ./sub/eval/generic.sh
 
+echo "exp finished"
+
 
 
