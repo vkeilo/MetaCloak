@@ -7,7 +7,7 @@ sys.path.append("/data/home/yekai/github/mypro/MetaCloak")
 from eval_score import get_score
 import numpy as np
 from robust_facecloak.attacks.worker.differential_color_functions import rgb2lab_diff, ciede2000_diff
-from robust_facecloak.generic.data_utils import PromptDataset, load_data
+from robust_facecloak.generic.data_utils import PromptDataset, load_data_by_picname
 
 def find_max_pixel_change(original_img, noisy_img):
     diff = torch.abs(original_img - noisy_img)
@@ -58,13 +58,19 @@ def get_ciede2000_diff(ori_imgs,advimgs):
 
 
 
-exp_dir = "/data/home/yekai/github/mypro/MetaCloak/exp_data-ori"
+# exp_dir = "/data/home/yekai/github/mypro/MetaCloak/exp_data-ori"
 
-ori_pics_dir = "/data/home/yekai/github/mypro/MetaCloak/exp_data-ori/gen_output/release-MetaCloak-advance_steps-2-total_trail_num-4-unroll_steps-1-interval-200-total_train_steps-1000-SD21base-robust-gauK-7/dataset-VGGFace2-clean-r-11-model-SD21base-gen_prompt-sks/0/image_clean_ref"
-noisy_pics_dir = "/data/home/yekai/github/mypro/MetaCloak/exp_data-ori/gen_output/release-MetaCloak-advance_steps-2-total_trail_num-4-unroll_steps-1-interval-200-total_train_steps-1000-SD21base-robust-gauK-7/dataset-VGGFace2-clean-r-11-model-SD21base-gen_prompt-sks/0/noise-ckpt/final"
-gen_pics_dir = "/data/home/yekai/github/mypro/MetaCloak/robust_facecloak/a_photo_of_sks_person"
+# ori_pics_dir = "/data/home/yekai/github/mypro/MetaCloak/exp_data-ori/gen_output/release-MetaCloak-advance_steps-2-total_trail_num-4-unroll_steps-1-interval-200-total_train_steps-1000-SD21base-robust-gauK-7/dataset-VGGFace2-clean-r-11-model-SD21base-gen_prompt-sks/0/image_before_addding_noise"
+# noisy_pics_dir = "/data/home/yekai/github/mypro/MetaCloak/exp_data-ori/gen_output/release-MetaCloak-advance_steps-2-total_trail_num-4-unroll_steps-1-interval-200-total_train_steps-1000-SD21base-robust-gauK-7/dataset-VGGFace2-clean-r-11-model-SD21base-gen_prompt-sks/0/noise-ckpt/final"
+# gen_pics_dir = "/data/home/yekai/github/mypro/MetaCloak/exp_data-ori/train_output/release-MetaCloak-advance_steps-2-total_trail_num-4-unroll_steps-1-interval-200-total_train_steps-1000-SD21base-robust-gauK-7-gau-gau-eval/gen-release-MetaCloak-advance_steps-2-total_trail_num-4-unroll_steps-1-interval-200-total_train_steps-1000-SD21base-robust-gauK-7-dataset-VGGFace2-clean-r-11-model-SD21base-gen_prompt-sks-eval-gau-rate-/0_DREAMBOOTH/checkpoint-1000/dreambooth/a_photo_of_sks_person"
+clean_ref_dir = "/data/home/yekai/github/mypro/MetaCloak/exp_data-ori/gen_output/release-MetaCloak-advance_steps-2-total_trail_num-4-unroll_steps-1-interval-200-total_train_steps-1000-SD21base-robust-gauK-7/dataset-VGGFace2-clean-r-11-model-SD21base-gen_prompt-sks/0/image_clean_ref/set_C"
 
-score_dict = get_score(gen_pics_dir,ori_pics_dir)
+ori_pics_dir = "/data/home/yekai/github/mypro/MetaCloak/robust_facecloak/ASPL-r11-3/n000050_ADVERSARIAL/image_before_addding_noise"
+noisy_pics_dir = "/data/home/yekai/github/mypro/MetaCloak/robust_facecloak/ASPL-r11-3/n000050_ADVERSARIAL/noise-ckpt/50"
+gen_pics_dir = "/data/home/yekai/github/mypro/MetaCloak/robust_facecloak/ASPL-r11-3/n000050_DREAMBOOTH/checkpoint-1000/dreambooth/a_photo_of_sks_person"
+# clean_ref_dir = ori_pics_dir
+
+score_dict = get_score(gen_pics_dir,clean_ref_dir)
 print(score_dict)
 k_list = list(score_dict.keys())
 for k in k_list:
@@ -77,8 +83,14 @@ for k in k_list:
 
 
 
-original_data = load_data(ori_pics_dir)
-perturbed_data = load_data(noisy_pics_dir)
+original_data = load_data_by_picname(ori_pics_dir)
+perturbed_data = load_data_by_picname(noisy_pics_dir)
+
+# print(original_data-perturbed_data)
+# print(perturbed_data)
+
+# print(original_data[0][0])
+# print(perturbed_data[0][0])
 
 max_noise_r = find_max_pixel_change(perturbed_data, original_data)
 noise_L0 = get_L0(perturbed_data, original_data)
@@ -96,4 +108,4 @@ print(f"pix_change_mean {noise_L1:.2f}")
 print(f"change_area_mean {noise_p*100:.2f}")
 print(f"ciede2000_score {ciede2000_score:.2f}")
 
-# print(score_dict)
+print(score_dict)

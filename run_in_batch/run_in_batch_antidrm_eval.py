@@ -26,36 +26,29 @@ def test_one_args(args,test_lable):
             set_env_with_expansion(k,v)
         else:
             os.environ[k] = str(v)
+
+    
     # os.chdir("..")
     # bash run : nohup bash script/gen_and_eval_vk.sh > output_MAT-1000-200-6-6-x1x1-radius11-allSGLD-rubust0.log 2>&1
-    os.environ["test_timestamp"] = str(int(time.time()))
-    test_timestamp = os.getenv("test_timestamp")
-    totle_step = os.getenv('total_train_steps')
-    dataset_name = os.getenv('dataset_name')
-    data_id = os.getenv('instance_name')
-    if os.getenv('total_gan_step') != "0":
-        totle_step = 'totle' + os.getenv('total_gan_step')
-    if os.getenv('attack_mode') in ["pgd"]:
-        os.environ["wandb_run_name"] = f"MAT-{dataset_name[:-6]}-id{data_id}-{totle_step}-{os.getenv('interval')}-{os.getenv('sampling_times_delta')}-{os.getenv('sampling_times_theta')}-x{os.getenv('defense_pgd_step_num')}x{os.getenv('attack_pgd_step_num')}s{os.getenv('defense_sample_num')}-radius{os.getenv('r')}-{os.getenv('SGLD_method')}-robust{os.getenv('attack_pgd_radius')}-{os.getenv('model_select_mode')}-{os.getenv('test_timestamp')}"
-    elif os.getenv('attack_mode') in ["pan","EOTpan","panrobust"]:
-        os.environ["wandb_run_name"] = f"MAT-PAN-{dataset_name[:-6]}-id{data_id}-{os.getenv('attack_mode')}-{totle_step}-{os.getenv('interval')}-{os.getenv('sampling_times_delta')}-{os.getenv('sampling_times_theta')}-x{os.getenv('defense_pgd_step_num')}x{os.getenv('attack_pgd_step_num')}s{os.getenv('defense_sample_num')}-radius{os.getenv('r')}-{os.getenv('SGLD_method')}-minL{os.getenv('min_L')}-Linterval{os.getenv('interval_L')}-robust{os.getenv('attack_pgd_radius')}-{os.getenv('model_select_mode')}-{os.getenv('pan_lambda_S')}-{os.getenv('pan_lambda_D')}-{os.getenv('pan_omiga')}-k={os.getenv('pan_k')}-use{os.getenv('pan_mode')}-{os.getenv('pan_use_val')}-omigas{os.getenv('omiga_strength')}-{os.getenv('test_timestamp')}"
-    # python 实现 export test_timestamp=$(date +%s)
-    run_name = os.getenv("wandb_run_name")
-    print(f"run_name: {run_name}")
-    os.system(f"nohup bash script/gen_and_eval_vk_batch.sh > output_{run_name}.log 2>&1")
-    check_file_for_pattern(f"output_{run_name}.log","find function last")
-    # rename dir exp_data to exp_data_{run_name}
-    # check dir exp_datas_output exist
-    if not os.path.exists("exp_datas_output"):
-        os.mkdir("exp_datas_output")
-    if not os.path.exists(f"exp_datas_output/{test_lable}"):
-        os.mkdir(f"exp_datas_output/{test_lable}")
-    if not os.path.exists("logs_output"):
-        os.mkdir("logs_output")
-    if not os.path.exists(f"logs_output/{test_lable}"):
-        os.mkdir(f"logs_output/{test_lable}")
-    os.system(f"mv exp_data-{test_timestamp} exp_datas_output/{test_lable}/exp_data_{run_name}")
-    os.system(f"mv output_{run_name}.log logs_output/{test_lable}/output_{run_name}.log")
+    # os.environ["test_timestamp"] = str(int(time.time()))
+    output_path = os.path.join(os.getenv("ADB_PROJECT_ROOT"),'exp_datas_output_antidrm',os.getenv("exp_batch_name"))
+    logs_path = os.path.join(os.getenv("ADB_PROJECT_ROOT"),'logs_output_antidrm',os.getenv("exp_batch_name"))
+    if not os.path.exists(output_path):
+        os.makedirs(output_path)
+    if not os.path.exists(logs_path):
+        os.makedirs(logs_path)
+    # only list path , not file
+    run_name_list = [name for name in os.listdir(output_path) if os.path.isdir(os.path.join(output_path, name))]
+    print(f'run_name_list: {run_name_list}')
+    finished_run_name_list = os.listdir(logs_path)
+    for run_name in run_name_list:
+        if f'{run_name}.log' in finished_run_name_list:
+            continue
+        print(f'processing run: {run_name}')
+        os.environ['exp_run_name'] = run_name
+        os.environ['wandb_run_name'] = run_name
+        os.system(f"nohup bash script/gen_and_eval_vk_antidrm_batch.sh > {logs_path}/{run_name}.log 2>&1")
+        check_file_for_pattern(f"{logs_path}/{run_name}.log","find function last")
     return run_name
 
 def update_finished_json(finished_log_json_path, run_name):

@@ -57,111 +57,28 @@ def generate_lin_interval_list(start, end, num):
     return np.linspace(start, end, num=num).tolist()
 
 # Define the possible values for each parameter
-test_lable = "PAN_VGGFace2_r6_id0to2_test"
-repeat_times = 1
+test_lable = "anti_eval_test"
 params_options = {
     "MODEL_ROOT": ["${ADB_PROJECT_ROOT}"],
     "gen_model_path": ["${MODEL_ROOT}/SD/stable-diffusion-2-1-base"],
     "init_model_state_pool_pth_path": [
-        "None"
+        "${MODEL_ROOT}/robust_facecloak/attacks/algs/tmpdata/init_model_state_pool_sd2-1.pth"
     ],
-    "dataset_name": ["VGGFace2-clean"],
-    "instance_name": [i for i in range(3)],
-    "model_select_mode":["order"],
-    "wandb_project_name": ["metacloak_PAN"],
+    "wandb_project_name": ["Eval_antidrm"],
+    "exp_batch_name": ["exp1"],
     "mixed_precision": ["fp16"],
-    "advance_steps": [2],
-    "total_trail_num": [2],
-    "total_train_steps": [300],
-    "total_gan_step":[12],
-    "interval": [100],
-    "dreambooth_training_steps": [10],
-    "step_size": [1],
-    "unroll_steps": [1],
-    "defense_sample_num": [1],
-    "defense_pgd_step_num": [6],
-    "sampling_times_delta": [1],
-    "sampling_times_theta": [1],
-    "attack_pgd_step_num": [0],
-    "attack_pgd_radius": [7],
-    "r": [6],
-    "rd": [11],
-    "SGLD_method": ["noSGLD"],
+    "dreambooth_training_steps": [1000],
     "gauK": [7],
     "eval_gen_img_num": [16],
     "attack_mode": ["pan"],
-    "pan_lambda_D": [0],
-    "pan_lambda_S": [4e-7],  # Multiple values for pan_lambda_S
-    # "pan_omiga": [316.23],
-    # 0.13894954943731375
-    "pan_omiga": [0.13894954943731375],
-    "pan_k": [2],  # Multiple values for pan_k
-    "pan_mode": ["S"],
-    "pan_use_val": ["last"],
-    "img_save_interval":[100],
-    "select_model_index":[0],
-    "Ltype":['ciede2000'],
-    "interval_L": [300],
-    "min_L": [1100],
-    "train_mode": ["gau"],
+    "select_model_index":[1],
     "eval_mode": ["no"],
-    "hpara_update_interval":[5],
-    "dynamic_mode":['L+m'],
-    "omiga_strength": ['2e-5'],
+    "round": [100],
 }
 
-# params_options = {
-#     "MODEL_ROOT": ["${ADB_PROJECT_ROOT}"],
-#     "gen_model_path": ["${MODEL_ROOT}/SD/stable-diffusion-2-1-base"],
-#     "init_model_state_pool_pth_path": [
-#         "${MODEL_ROOT}/robust_facecloak/attacks/algs/tmpdata/init_model_state_pool_sd2-1.pth"
-#     ],
-#     "dataset_name": ["VGGFace2-clean"],
-#     "instance_name": [0],
-#     "model_select_mode":["order"],
-#     "wandb_project_name": ["metacloak_PAN"],
-#     "mixed_precision": ["fp16"],
-#     "advance_steps": [2],
-#     "total_trail_num": [4],
-#     "total_train_steps": [1000],
-#     "total_gan_step":[120],
-#     "interval": [200],
-#     "dreambooth_training_steps": [1000],
-#     "step_size": [1],
-#     "unroll_steps": [1],
-#     "defense_sample_num": [1],
-#     "defense_pgd_step_num": [6],
-#     "sampling_times_delta": [1],
-#     "sampling_times_theta": [1],
-#     "attack_pgd_step_num": [0],
-#     "attack_pgd_radius": [7],
-#     "r": [8,9,10,11],
-#     "rd": [11],
-#     "SGLD_method": ["noSGLD"],
-#     "gauK": [7],
-#     "eval_gen_img_num": [16],
-#     "attack_mode": ["pan"],
-#     "pan_lambda_D": [0],
-#     "pan_lambda_S": [4e-7],  # Multiple values for pan_lambda_S
-#     # "pan_omiga": [316.23],
-#     # 0.13894954943731375
-#     "pan_omiga": [0.13894954943731375],
-#     "pan_k": [2],  # Multiple values for pan_k
-#     "pan_mode": ["S"],
-#     "pan_use_val": ["last"],
-#     "img_save_interval":[100],
-#     "select_model_index":[1],
-#     "Ltype":['ciede2000'],
-#     "interval_L": [300],
-#     "min_L": [900,1100,1300,1500],
-#     "train_mode": ["gau"],
-#     "eval_mode": ["gau"],
-#     "hpara_update_interval":[5],
-#     "dynamic_mode":['L+m'],
-#     "omiga_strength": "lin:1e-5:5e-5:5",
-# }
-
 # Number of times to repeat each configuration
+# do not change
+repeat_times = 1
 
 
 for key, value in params_options.items():

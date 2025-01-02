@@ -175,7 +175,7 @@ def parse_args(input_args=None):
     parser.add_argument(
         "--gau_kernel_size",
         type=int,
-        default=5,
+        default=0,
         help="The kernel size for gaussian noise defense."
     )
     

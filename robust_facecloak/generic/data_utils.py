@@ -45,6 +45,27 @@ def load_data(data_dir,):
     assert images.shape[-1] == images.shape[-2]
     return images
 
+def load_data_by_picname(data_dir,):
+    import numpy as np
+    def image_to_numpy(image):
+        return np.array(image).astype(np.uint8)
+    # more robust loading to avoid loaing non-image files
+    images = [] 
+    for i in sorted(Path(data_dir).iterdir(), key=lambda x: str(x)):
+    # for i in list(Path(data_dir).iterdir()):
+        if not i.suffix in [".jpg", ".png", ".jpeg"]:
+            continue
+        else:
+            images.append(image_to_numpy(Image.open(i).convert("RGB")))
+    # resize the images to 512 x 512
+    images = [Image.fromarray(i).resize((512, 512)) for i in images]
+    images = np.stack(images)
+    # from B x H x W x C to B x C x H x W
+    images = torch.from_numpy(images).permute(0, 3, 1, 2).float()
+    # images = np.array(images).transpose(0, 3, 1, 2)
+    assert images.shape[-1] == images.shape[-2]
+    return images
+
     
     
 from PIL import Image
