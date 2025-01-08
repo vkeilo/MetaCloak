@@ -266,8 +266,8 @@ class PANAttacker():
         ).input_ids.repeat(len(adv_image_tran), 1)
 
         loss_P = self.certi(f, adv_image_tran, vae, noise_scheduler, input_ids, weight_dtype=self.weight_dtype)
-        # 取最大是否合适
         pertubation_linf = self.get_pertubation_linf(adv_image,ori_image)
+        print(f"loss_d linf: {pertubation_linf}")
         loss = - loss_P + (self.lambda_D * torch.abs(pertubation_linf))
         return loss
 
@@ -523,7 +523,7 @@ class PANAttacker():
         # else:
         #     raise NotImplementedError
         if mode == "D":
-            adv_x.clamp_(-(11)/(0.5*255), (11)/(0.5*255))
+            adv_x.clamp_(-(self.radius_d), (self.radius_d))
         else:
             adv_x.clamp_(-self.radius, self.radius)
         adv_x = adv_x + x

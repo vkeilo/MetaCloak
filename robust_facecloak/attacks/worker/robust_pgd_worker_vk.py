@@ -11,7 +11,7 @@ import torch.nn.functional as F
 class RobustPGDAttacker():
     def __init__(self, radius, steps, step_size, random_start, trans, sample_num, attacker, norm_type='l-infty', ascending=True, args=None, x_range=[0, 255], target_weight=1.0):        
         self.noattack = radius == 0. or steps == 0 or step_size == 0.
-        self.radius = radius
+        self.radius = radius-1
         self.step_size = step_size
         self.steps = steps # how many step to conduct pgd
         self.random_start = random_start
@@ -25,7 +25,7 @@ class RobustPGDAttacker():
         self.pattern = np.random.randint( 0, 72, size=(16, 16, 3), dtype=np.uint8)
         print(
             "summary of the attacker: \n"
-            f"radius: {self.radius}\n"
+            f"radius: {radius}\n"
             f"steps: {self.steps}\n"
             f"step_size: {self.step_size}\n"
             f"random_start: {self.random_start}\n"

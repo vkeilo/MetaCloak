@@ -6,7 +6,8 @@ export MODEL_PATH=$eval_model_path
 echo $MODEL_PATH
 
 export WANDB_MODE=offline
-export CLEAN_REF="$ADB_PROJECT_ROOT/dataset/$dataset_name/${instance_name}/set_C"
+# export CLEAN_REF="$ADB_PROJECT_ROOT/dataset/$dataset_name/${instance_name}/set_C"
+export CLEAN_REF="$ADB_PROJECT_ROOT/exp_datas_output_antidrm/$exp_batch_name/$exp_run_name/image_clean/"
 class_name=$(cat $ADB_PROJECT_ROOT/dataset/$dataset_name/${instance_name}/class.txt)
 # map class_name from face to person
 if [ "$class_name" = "face" ]; then
@@ -20,7 +21,8 @@ eval_prompts=$(head -n 2 $ADB_PROJECT_ROOT/dataset/$dataset_name/${instance_name
 # train_exp_name=$gen_exp_name-$train_exp_name_prefix-$train_mode-eval
 # train_hyper=gen-$gen_exp_name-$gen_exp_hyper-eval-$train_exp_name_prefix-rate-$poison_rate
 
-export DREAMBOOTH_OUTPUT_DIR="$ADB_PROJECT_ROOT/exp_datas_output_antidrm/$batch_name/$run_name/train_output/"
+export DREAMBOOTH_OUTPUT_DIR="$ADB_PROJECT_ROOT/exp_datas_output_antidrm/$exp_batch_name/$exp_run_name/train_output/"
+echo "dreambooth output to $DREAMBOOTH_OUTPUT_DIR"
 # export TEXTUAL_INVERSION_OUTPUT_DIR="$ADB_PROJECT_ROOT/exp_data-$test_timestamp/train_output/$train_exp_name/$train_hyper/${instance_name}_TEXTUAL_INVERSION"
 
 # export DREAMBOOTH_OUTPUT_DIR="$ADB_PROJECT_ROOT/exp_data-$test_timestamp/train_output/$train_exp_name/$train_hyper/${instance_name}_DREAMBOOTH"
@@ -33,7 +35,7 @@ source activate $ADB_ENV_NAME;
 conda activate Metacloak
 
 # this is to indicate that whether we have finished the training before 
-training_finish_indicator=$DREAMBOOTH_OUTPUT_DIR/finished.txt
+# training_finish_indicator=$DREAMBOOTH_OUTPUT_DIR/finished.txt
 
 echo $INSTANCE_DIR
 # skip training if instance data not exist 
@@ -188,3 +190,6 @@ else
     eval $command
   done
 fi
+
+mv $DREAMBOOTH_OUTPUT_DIR/checkpoint-$dreambooth_training_steps/dreambooth $DREAMBOOTH_OUTPUT_DIR
+rm -r $DREAMBOOTH_OUTPUT_DIR/checkpoint-$dreambooth_training_steps

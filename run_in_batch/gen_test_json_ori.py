@@ -57,25 +57,23 @@ def generate_lin_interval_list(start, end, num):
     return np.linspace(start, end, num=num).tolist()
 
 # Define the possible values for each parameter
-# test_lable = "PAN_VGGFace2_r6_eval0_idx50_20250103"
-test_lable = "PAN_VGGFace2_r6_eval0_omiga2e-5_idx50_total120_hyperinterval2_20250107_part1"
-repeat_times = 1
+test_lable = "PAN_r1to6rd11_ciede2000_300to900inv300_s4e-7d0_omiga013_omigas1e-5to5e-5x5_Lpm_eval0_20241226_part5e-5"
+repeat_times = 5
 params_options = {
     "MODEL_ROOT": ["${ADB_PROJECT_ROOT}"],
     "gen_model_path": ["${MODEL_ROOT}/SD/stable-diffusion-2-1-base"],
     "init_model_state_pool_pth_path": [
-        "None"
-        # "${MODEL_ROOT}/SD/init_model_state_pool_sd2-1.pth"
+        "${MODEL_ROOT}/SD/init_model_state_pool_sd2-1.pth"
     ],
     "dataset_name": ["VGGFace2-clean"],
-    "instance_name": [i for i in range(25)],
+    "instance_name": [0],
     "model_select_mode":["order"],
     "wandb_project_name": ["metacloak_PAN"],
     "mixed_precision": ["fp16"],
     "advance_steps": [2],
-    "total_trail_num": [2],
+    "total_trail_num": [4],
     "total_train_steps": [1000],
-    "total_gan_step":[360],
+    "total_gan_step":[120],
     "interval": [200],
     "dreambooth_training_steps": [1000],
     "step_size": [1],
@@ -86,30 +84,33 @@ params_options = {
     "sampling_times_theta": [1],
     "attack_pgd_step_num": [0],
     "attack_pgd_radius": [7],
-    "r": [6],
+    "r": [1,2,3,4,5,6],
     "rd": [11],
     "SGLD_method": ["noSGLD"],
     "gauK": [7],
     "eval_gen_img_num": [16],
-    "train_mode": ["gau"],
-    "eval_mode": ["no"],
-    "img_save_interval":[60],
-    "select_model_index":[0],
     "attack_mode": ["pan"],
     "pan_lambda_D": [0],
     "pan_lambda_S": [4e-7],  # Multiple values for pan_lambda_S
+    # "pan_omiga": [316.23],
     # 0.13894954943731375
     "pan_omiga": [0.13894954943731375],
     "pan_k": [2],  # Multiple values for pan_k
     "pan_mode": ["S"],
     "pan_use_val": ["last"],
+    "img_save_interval":[100],
+    "select_model_index":[0],
     "Ltype":['ciede2000'],
     "interval_L": [300],
-    "min_L": [500],
-    "hpara_update_interval":[2],
+    "min_L": [300,500,700,900],
+    "train_mode": ["gau"],
+    "eval_mode": ["no"],
+    "hpara_update_interval":[5],
     "dynamic_mode":['L+m'],
-    "omiga_strength": ['2e-5'],
+    "omiga_strength": [5e-5],
 }
+
+# Number of times to repeat each configuration
 
 
 for key, value in params_options.items():

@@ -15,6 +15,9 @@
 
 # Modified by Yixin Liu, Lehigh University 2023, with some changes in adversarial attack and defense settings
 
+
+
+
 import requests
 # from PIL import Image
 from io import BytesIO
@@ -28,6 +31,12 @@ import argparse
 import hashlib
 import itertools
 import logging
+
+# vkeilo add it ,to disable WARNING - urllib3.connectionpool
+import urllib3
+logging.getLogger("urllib3").setLevel(logging.ERROR)
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
 import math
 import os
 import warnings
@@ -1146,3 +1155,4 @@ if __name__ == "__main__":
     args = parse_args()
 
     main(args)
+    print("exp finished")

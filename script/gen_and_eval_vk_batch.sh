@@ -54,7 +54,7 @@ export prefix_name_train=$prefix_name_train
 export method_hyper_name=$method_name-$method_hyper
 export gen_exp_name=$gen_exp_name_prefix-$method_hyper_name
 export gen_exp_hyper=dataset-$dataset_name-r-$r-model-$gen_model_name-gen_prompt-$gen_prompt
-export OUTPUT_DIR="$ADB_PROJECT_ROOT/exp_data-$test_timestamp/gen_output/${gen_exp_name}/$gen_exp_hyper/${instance_name}"
+export OUTPUT_DIR="$ADB_PROJECT_ROOT/exp_data-$test_timestamp/gen_output/$gen_exp_name/$gen_exp_hyper/$instance_name"
 export INSTANCE_DIR=$OUTPUT_DIR/noise-ckpt/${round}
 export CLEAN_INSTANCE_DIR=$OUTPUT_DIR/image_before_addding_noise/
 export INSTANCE_DIR_CHECK=$INSTANCE_DIR
@@ -64,13 +64,12 @@ export PYTHONPATH=$ADB_PROJECT_ROOT:$PYTHONPATH
 
 
 echo "PYTHONPATH:${PYTHONPATH}"
+echo "dreambooth output to $OUTPUT_DIR"
 # generate the noise 
 bash ./sub/gen/$gen_file_name
 
 # evaluate the noise with dreambooth training
 bash ./sub/eval/generic.sh
-
-echo "exp finished"
 
 
 

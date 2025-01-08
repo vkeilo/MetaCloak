@@ -1272,7 +1272,7 @@ def main(args):
     noise_p = get_change_p(perturbed_data, original_data)
     ciede2000_score = get_ciede2000_diff(original_data, perturbed_data)
     print(f"noise_L0 {noise_L0:.2f}")
-    print(f"pix_change_mean {noise_L1:.2f}")
+    print(f"pix_change_mean {noise_L1/(512*512)/2:.2f}")
     print(f"change_area_mean {noise_p*100:.2f}")
     print(f"ciede2000_score {ciede2000_score:.2f}")
 

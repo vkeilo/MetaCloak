@@ -47,6 +47,7 @@ export prefix_name_train=$prefix_name_train
 export method_hyper_name=$method_name-$method_hyper
 export gen_exp_name=$gen_exp_name_prefix-$method_hyper_name
 export gen_exp_hyper=dataset-$dataset_name-r-$r-model-$gen_model_name-gen_prompt-$gen_prompt
+# not dreambooth out path
 export OUTPUT_DIR="$ADB_PROJECT_ROOT/exp_datas_output_antidrm/$exp_batch_name/$exp_run_name"
 export INSTANCE_DIR=$OUTPUT_DIR/noise-ckpt/${round}
 export CLEAN_INSTANCE_DIR=$OUTPUT_DIR/image_before_addding_noise/

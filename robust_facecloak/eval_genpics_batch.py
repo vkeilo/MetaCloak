@@ -2,9 +2,9 @@
 import os
 import sys
 import torch
-sys.path.append("/data/home/yekai/github/mypro/MetaCloak")
+sys.path.append("/data/home/yekai/github/MetaCloak")
 
-from eval_score import get_score
+# from eval_score import get_score
 import numpy as np
 from robust_facecloak.attacks.worker.differential_color_functions import rgb2lab_diff, ciede2000_diff
 from robust_facecloak.generic.data_utils import PromptDataset, load_data_by_picname
@@ -63,49 +63,55 @@ def get_ciede2000_diff(ori_imgs,advimgs):
 # ori_pics_dir = "/data/home/yekai/github/mypro/MetaCloak/exp_data-ori/gen_output/release-MetaCloak-advance_steps-2-total_trail_num-4-unroll_steps-1-interval-200-total_train_steps-1000-SD21base-robust-gauK-7/dataset-VGGFace2-clean-r-11-model-SD21base-gen_prompt-sks/0/image_before_addding_noise"
 # noisy_pics_dir = "/data/home/yekai/github/mypro/MetaCloak/exp_data-ori/gen_output/release-MetaCloak-advance_steps-2-total_trail_num-4-unroll_steps-1-interval-200-total_train_steps-1000-SD21base-robust-gauK-7/dataset-VGGFace2-clean-r-11-model-SD21base-gen_prompt-sks/0/noise-ckpt/final"
 # gen_pics_dir = "/data/home/yekai/github/mypro/MetaCloak/exp_data-ori/train_output/release-MetaCloak-advance_steps-2-total_trail_num-4-unroll_steps-1-interval-200-total_train_steps-1000-SD21base-robust-gauK-7-gau-gau-eval/gen-release-MetaCloak-advance_steps-2-total_trail_num-4-unroll_steps-1-interval-200-total_train_steps-1000-SD21base-robust-gauK-7-dataset-VGGFace2-clean-r-11-model-SD21base-gen_prompt-sks-eval-gau-rate-/0_DREAMBOOTH/checkpoint-1000/dreambooth/a_photo_of_sks_person"
-clean_ref_dir = "/data/home/yekai/github/mypro/MetaCloak/exp_data-ori/gen_output/release-MetaCloak-advance_steps-2-total_trail_num-4-unroll_steps-1-interval-200-total_train_steps-1000-SD21base-robust-gauK-7/dataset-VGGFace2-clean-r-11-model-SD21base-gen_prompt-sks/0/image_clean_ref/set_C"
 
-ori_pics_dir = "/data/home/yekai/github/mypro/MetaCloak/robust_facecloak/ASPL-r11-3/n000050_ADVERSARIAL/image_before_addding_noise"
-noisy_pics_dir = "/data/home/yekai/github/mypro/MetaCloak/robust_facecloak/ASPL-r11-3/n000050_ADVERSARIAL/noise-ckpt/50"
-gen_pics_dir = "/data/home/yekai/github/mypro/MetaCloak/robust_facecloak/ASPL-r11-3/n000050_DREAMBOOTH/checkpoint-1000/dreambooth/a_photo_of_sks_person"
-# clean_ref_dir = ori_pics_dir
+target_path = "/data/home/yekai/github/MetaCloak/exp_datas_output_antidrm/SimAC_VGGFace2_random50v1_r6"
+rounds = "50"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+score_dict = {"max_noise_r":[],"noise_L0":[],"pix_change_mean":[],"change_area_mean":[],"ciede2000_score":[]}
+for exp_dir in os.listdir(target_path):
+    exp_pahth = os.path.join(target_path,exp_dir)
+    clean_ref_dir = os.path.join(exp_pahth,'image_clean')
+    ori_pics_dir = os.path.join(exp_pahth,"image_before_addding_noise")
+    noisy_pics_dir = os.path.join(exp_pahth,f"noise-ckpt/{rounds}")
+    # gen_pics_dir = os.path.join(exp_pahth,"train_output/dreambooth/a_photo_of_sks_person")
+    # clean_ref_dir = ori_pics_dir
 
-score_dict = get_score(gen_pics_dir,clean_ref_dir)
-print(score_dict)
-k_list = list(score_dict.keys())
-for k in k_list:
-    means = []
-    means.append(score_dict[k])
-    print(f"{k}_mean {np.mean(means)}")
-    stds = []
-    stds.append(score_dict[k])
-    print(f"{k}_std {np.std(stds)}")
+    # score_dict = get_score(gen_pics_dir,clean_ref_dir)
+    # print(score_dict)
+    # k_list = list(score_dict.keys())
+    # for k in k_list:
+    #     means = []
+    #     means.append(score_dict[k])
+    #     print(f"{k}_mean {np.mean(means)}")
+    #     stds = []
+    #     stds.append(score_dict[k])
+    #     print(f"{k}_std {np.std(stds)}")
 
 
 
-original_data = load_data_by_picname(ori_pics_dir)
-perturbed_data = load_data_by_picname(noisy_pics_dir)
+    original_data = load_data_by_picname(ori_pics_dir)
+    perturbed_data = load_data_by_picname(noisy_pics_dir)
+    max_noise_r = find_max_pixel_change(perturbed_data, original_data)
+    noise_L0 = get_L0(perturbed_data, original_data)
+    noise_L1 = get_L1(perturbed_data, original_data)
+    noise_p = get_change_p(perturbed_data, original_data)
+    ciede2000_score = get_ciede2000_diff(original_data, perturbed_data)
+    score_dict['max_noise_r'].append(max_noise_r)
+    score_dict['noise_L0'].append(noise_L0)
+    score_dict['pix_change_mean'].append(noise_L1/(512*512)/2)
+    score_dict['change_area_mean'].append(noise_p*100)
+    score_dict['ciede2000_score'].append(ciede2000_score)
 
-# print(original_data-perturbed_data)
-# print(perturbed_data)
+data_len = len(score_dict['max_noise_r'])
+all_max_noise_r = sum(score_dict['max_noise_r'])/data_len
+all_noise_L0 = sum(score_dict['noise_L0'])/data_len
+all_pix_change_mean = sum(score_dict['pix_change_mean'])/data_len
+all_change_area_mean = sum(score_dict['change_area_mean'])/data_len
+all_ciede2000_score = sum(score_dict['ciede2000_score'])/data_len
 
-# print(original_data[0][0])
-# print(perturbed_data[0][0])
 
-max_noise_r = find_max_pixel_change(perturbed_data, original_data)
-noise_L0 = get_L0(perturbed_data, original_data)
-noise_L1 = get_L1(perturbed_data, original_data)
-noise_p = get_change_p(perturbed_data, original_data)
-ciede2000_score = get_ciede2000_diff(original_data, perturbed_data)
-score_dict['max_noise_r'] = max_noise_r
-score_dict['noise_L0'] = noise_L0
-score_dict['pix_change_mean'] = noise_L1/(512*512)/2
-score_dict['change_area_mean'] = noise_p*100
-score_dict['ciede2000_score'] = ciede2000_score
-print(f"max_noise_r {max_noise_r:.2f}")
-print(f"noise_L0 {noise_L0:.2f}")
-print(f"pix_change_mean {noise_L1:.2f}")
-print(f"change_area_mean {noise_p*100:.2f}")
-print(f"ciede2000_score {ciede2000_score:.2f}")
-
-print(score_dict)
+print(f"max_noise_r {all_max_noise_r:.2f}")
+print(f"noise_L0 {all_noise_L0:.2f}")
+print(f"pix_change_mean {all_pix_change_mean:.2f}")
+print(f"change_area_mean {all_change_area_mean:.2f}")
+print(f"ciede2000_score {all_ciede2000_score:.6f}")

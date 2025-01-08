@@ -4,6 +4,8 @@ import torch.nn.functional as F
 class PGDAttacker():
     def __init__(self, radius, steps, step_size, random_start, norm_type='l-infty', ascending=True, args=None, x_range=[-1, 1]):
         self.noattack = radius == 0. or steps == 0 or step_size == 0.
+        if self.noattack :
+            print("PGDAttacker noattack")
         self.radius = (radius-0.5*255)/0.5*255
         self.step_size = (step_size-0.5*255)/0.5*255
         self.steps = steps # how many step to conduct pgd
@@ -12,6 +14,7 @@ class PGDAttacker():
         self.ascending = ascending # perform gradient ascending, i.e, to maximum the loss
         self.args=args
         self.left , self.right = x_range
+        
         
     
     def certi(self, models, adv_x, vae, noise_scheduler, input_ids, device=torch.device("cuda"), weight_dtype=torch.float32, target_tensor=None, ):
@@ -135,7 +138,9 @@ class PGDAttacker():
         
 
     def _clip_(self, adv_x, x):
+        # print(f'now x is {adv_x}')
         adv_x = adv_x - x
+        # print(f'now adv_x is {adv_x}')
         if self.norm_type == 'l-infty':
             adv_x.clamp_(-self.radius, self.radius)
         else:
