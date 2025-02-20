@@ -57,7 +57,7 @@ def generate_lin_interval_list(start, end, num):
     return np.linspace(start, end, num=num).tolist()
 
 # Define the possible values for each parameter
-test_lable = "SimAC_VGGFace2_random50v1_r6"
+test_lable = "Orimetacloak4_total480_r6_idx50"
 params_options = {
     "MODEL_ROOT": ["${ADB_PROJECT_ROOT}"],
     "gen_model_path": ["${MODEL_ROOT}/SD/stable-diffusion-2-1-base"],
@@ -65,15 +65,15 @@ params_options = {
         "${MODEL_ROOT}/robust_facecloak/attacks/algs/tmpdata/init_model_state_pool_sd2-1.pth"
     ],
     "wandb_project_name": ["Eval_antidrm"],
-    "exp_batch_name": ["SimAC_VGGFace2_random50v1_r6"],
+    "exp_batch_name": ["Orimetacloak4_total480_r6_idx50"],
     "mixed_precision": ["fp16"],
-    "dreambooth_training_steps": [1000],
+    "dreambooth_training_steps": [10],
     "gauK": [7],
-    "eval_gen_img_num": [16],
+    "eval_gen_img_num": [3],
     "attack_mode": ["pan"],
     "select_model_index":[0],
     "eval_mode": ["no"],
-    "round": [50],
+    "round": [480],
 }
 
 # Number of times to repeat each configuration

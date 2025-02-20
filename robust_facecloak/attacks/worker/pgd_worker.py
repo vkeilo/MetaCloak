@@ -30,7 +30,7 @@ class PGDAttacker():
         noise = torch.randn_like(adv_latens)
         bsz = adv_latens.shape[0]
         # Sample a random timestep for each image
-        timesteps = torch.randint(0, noise_scheduler.config.num_train_timesteps, (bsz,), device=adv_latens.device)
+        timesteps = torch.randint(0, int(noise_scheduler.config.num_train_timesteps * self.args.time_select), (bsz,), device=adv_latens.device)
         timesteps = timesteps.long()
         # Add noise to the latents according to the noise magnitude at each timestep
         # (this is the forward diffusion process)

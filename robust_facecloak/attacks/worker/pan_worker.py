@@ -1,3 +1,4 @@
+import numpy as np
 from torchvision import transforms
 import torch
 import torch.nn.functional as F
@@ -16,9 +17,29 @@ class PANAttacker():
         self.hpara_update_interval = args.hpara_update_interval
         self.k = k
         self.alpha = (step_size)/(0.5*255)
-        self.radius = (radius-0.25)/(0.5*255)
-        self.radius_d = (args.radius_d-0.25)/(0.5*255)
+        self.radius_pix = radius
+        self.radius = (radius - 0.25)/(0.5*255)
+        self.radius_d_pix = args.radius_d
+        # self.now_radius_d_pix = radius + 2
+        self.now_radius_d_pix = self.radius_d_pix
+        self.radius_d = (self.now_radius_d_pix - 0.25)/(0.5*255)
         self.dynamic_mode = args.dynamic_mode
+        self.lambda_lock = False
+        self.min_L = args.min_L
+        self.max_L = args.max_L
+        self.L_interval = self.max_L - self.min_L
+        self.L_renum = 7
+        self.L_change_start = 0.2
+        self.L_change_end = 0.9
+        self.total_steps = args.total_gan_step * steps
+        self.max_L_list = np.linspace(2*self.max_L,self.max_L,int(self.total_steps * (self.L_change_end - self.L_change_start))//self.L_renum)
+        # print(f'self.max_L_list:{len(self.max_L_list)}')
+        # print(f'self.max_L_list:{self.max_L_list}')
+        # note
+        # self.max_L = self.max_L * 2
+        self.max_L = self.max_L
+        self.min_L = self.max_L - self.L_interval
+
         assert self.dynamic_mode in ['L_only',"multi","L+m",""]
         print(f"lambda_D: {lambda_D}, lambda_S: {lambda_S}, omiga: {omiga}")
         print(f'use Ltype:{args.Ltype}')
@@ -36,7 +57,7 @@ class PANAttacker():
         self.use_val = use_val
         self.noattack = radius == 0. or steps == 0 or step_size == 0.
         self.args = args
-        self.time_select = 1
+        self.time_select = args.time_select
         self.pertubation_D = None
         self.pertubation_S = None
         self.trans = trans
@@ -45,11 +66,13 @@ class PANAttacker():
             mean=[-1]*3,
             std=[1/(0.5*255)]*3
         )
+        self.now_gau_flag = random.choice([True, False])
         
         # self.ciede_max = 2500
         self.seed = random.randint(0, 2**32 - 1)
         self.gau_filter = transforms.GaussianBlur(kernel_size=args.gau_kernel_size,)
         self.step_cnt = 0
+        self.best_step = 0
         self.device = torch.device("cuda")
         if args.mixed_precision in ["fp32",'no']:
             self.weight_dtype = torch.float32
@@ -57,6 +80,13 @@ class PANAttacker():
             self.weight_dtype = torch.float16
         elif args.mixed_precision == "bf16":
             self.weight_dtype = torch.bfloat16
+
+        # slowly increase radius_d
+        add_times = int(self.radius_d_pix - self.radius_pix)
+        self.add_step_list = np.linspace(0, self.total_steps // 2, add_times + 1)
+        print(f'add_step_list:{self.add_step_list}')
+        self.add_step_list = np.round(self.add_step_list).astype(int).tolist()
+        
     def update_seed(self):
         self.seed = random.randint(0, 2**32 - 1)
 
@@ -129,6 +159,10 @@ class PANAttacker():
         tmp_noise_S = torch.zeros_like(ori_image).to(device,dtype=self.weight_dtype)
         for i in range(self.steps):
             self.step_cnt+=1
+            # self.now_gau_flag = random.choice([True, False])
+            # print(f"step gau_use_flag:{self.now_gau_flag}")
+            # self.update_rd()
+            # self.update_L_max()
             # if self.use_gau == True:
             #     # print(f'before trans:{pertubation_data_S_in[0]}')
             #     use_pertubation_data_D = self.trans(pertubation_data_D_in).to(device, dtype=self.weight_dtype) + tmp_noise_D
@@ -291,7 +325,10 @@ class PANAttacker():
         scaler = GradScaler()
         adv_image = Ped_data_D.clone().detach() 
         adv_image.requires_grad = True
-        adv_image_tran = self.trans(adv_image) if self.use_gau else adv_image
+        print(f'adv_image shape0:{adv_image.shape}')
+        adv_image_tran = self.trans(adv_image) if self.use_gau  else adv_image
+        # adv_image_tran = self.trans(adv_image) if self.use_gau and self.now_gau_flag  else adv_image
+        print(f'adv_image shape1:{adv_image.shape}')
 
         # 计算损失
         loss = self.get_loss_D(f, adv_image_tran, adv_image, ori_image, vae, tokenizer, noise_scheduler)
@@ -484,12 +521,27 @@ class PANAttacker():
     def update_lambda_S(self,pertubation_linf_S):
         if self.dynamic_mode == "L_only" or self.dynamic_mode == "L+m":
             if self.step_cnt%self.hpara_update_interval==0 and (self.args.max_L != 0 or self.args.min_L != 0):
-                if pertubation_linf_S > self.args.max_L**self.k:
-                    self.lambda_S = self.lambda_S * 2
+                # if self.step_cnt > 0.5 * self.total_steps and pertubation_linf_S<self.args.max_L**self.k and pertubation_linf_S >self.args.min_L**self.k:
+                #     self.lambda_lock = True
+                # if not self.lambda_lock:
+                #     if pertubation_linf_S > self.max_L**self.k:
+                #         self.best_step = self.step_cnt
+                #         self.lambda_S = self.lambda_S * 1.5
+                #         print(f'update lambda_S: {self.lambda_S}')
+                #         # self.omiga = self.omiga * 0.5
+                #         # print(f'update omiga: {self.omiga}')
+                #     if pertubation_linf_S < self.min_L**self.k:
+                #         self.lambda_S = self.lambda_S * 0.8
+                #         print(f'update lambda_S: {self.lambda_S}')
+                #     self.lambda_S = self.lambda_S.detach()
+                #     self.lambda_S.requires_grad=True
+                if pertubation_linf_S > self.max_L**self.k:
+                    self.best_step = self.step_cnt
+                    self.lambda_S = self.lambda_S * 1.5
                     print(f'update lambda_S: {self.lambda_S}')
                     # self.omiga = self.omiga * 0.5
                     # print(f'update omiga: {self.omiga}')
-                if pertubation_linf_S < self.args.min_L**self.k:
+                if pertubation_linf_S < self.min_L**self.k:
                     self.lambda_S = self.lambda_S * 0.8
                     print(f'update lambda_S: {self.lambda_S}')
                 self.lambda_S = self.lambda_S.detach()
@@ -512,6 +564,24 @@ class PANAttacker():
             print(f'update omiga: {self.omiga}')
             self.omiga_rate = self.omiga * 0.1
 
+    def update_rd(self):
+        if self.step_cnt >= 0.5 * self.total_steps:
+            out_step = self.step_cnt - self.total_steps // 2
+            if out_step in self.add_step_list:
+                # self.now_radius_d_pix += 1
+                self.now_radius_d_pix = random.randint(self.radius_pix+1,self.radius_d_pix)
+                self.radius_d = (self.now_radius_d_pix-0.25)/(0.5*255)
+
+    def update_L_max(self):
+        if self.step_cnt >= self.L_change_start * self.total_steps and self.step_cnt < self.L_change_end * self.total_steps:
+            out_step = int(self.step_cnt - self.L_change_start * self.total_steps)
+            self.max_L = self.max_L_list[out_step%len(self.max_L_list)]
+            self.min_L = self.max_L - self.L_interval
+            print(f'update self.max_L:{self.max_L}')
+        elif self.step_cnt == self.L_change_end * self.total_steps:
+            self.max_L = self.max_L_list[-1]
+            self.min_L = self.max_L - self.L_interval
+            print(f'rechange self.max_L to:{self.max_L}')
     def _clip_(self, adv_x, x, mode = None):
         # print(f"clip to {x[0]}")
         adv_x.to(dtype=torch.float32)

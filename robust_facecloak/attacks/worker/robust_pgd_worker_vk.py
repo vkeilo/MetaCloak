@@ -47,22 +47,40 @@ class RobustPGDAttacker():
         noise = torch.randn_like(adv_latens)
         bsz = adv_latens.shape[0]
         # Sample a random timestep for each image
-        timesteps = torch.randint(0, noise_scheduler.config.num_train_timesteps, (bsz,), device=adv_latens.device)
+        timesteps = torch.randint(0, int(noise_scheduler.config.num_train_timesteps * self.args.time_select), (bsz,), device=adv_latens.device)
         timesteps = timesteps.long()
         # Add noise to the latents according to the noise magnitude at each timestep
         # (this is the forward diffusion process)
         noisy_latents = noise_scheduler.add_noise(adv_latens, noise, timesteps)
-        encoder_hidden_states = text_encoder(input_ids.to(device))[0]
-        
         args=self.args
-        
+        # vkeilo add it
+        from copy import deepcopy
+        text_encoder_noised = deepcopy(text_encoder)
+        encoder_hidden_states = None
+        noised_unet = deepcopy(unet)
+        if args.use_text_noise == 1:
+            for param in text_encoder_noised.parameters():
+                        tmp_noise = torch.randn_like(param) * (args.text_noise_r)  # 生成与参数同大小的噪声
+                        param.add_(tmp_noise)
+            encoder_hidden_states = text_encoder_noised(input_ids.to(device))[0]
+        else:
+            encoder_hidden_states = text_encoder(input_ids.to(device))[0]
+
         if "robust_instance_conditioning_vector" in vars(args).keys() and args.robust_instance_conditioning_vector:
             condition_vector = args.robust_instance_conditioning_vector_data
             # print('this is your condition vector')
             # print(condition_vector.shape)
             encoder_hidden_states[0,:7,:] = condition_vector.to(device, dtype=weight_dtype)
 
-        model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
+        # vkeilo add it
+        if (args.use_unet_noise) == 1:
+            for param in noised_unet.parameters():
+                        tmp_noise = torch.randn_like(param) * (args.unet_noise_r)  # 生成与参数同大小的噪声
+                        param.add_(tmp_noise)
+            model_pred = noised_unet(noisy_latents, timesteps, encoder_hidden_states).sample
+        else:
+            model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
+        # model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
         # Get the target for loss depending on the prediction type
         if noise_scheduler.config.prediction_type == "epsilon":
             target = noise

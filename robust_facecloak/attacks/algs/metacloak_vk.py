@@ -26,7 +26,7 @@ from accelerate.logging import get_logger
 from accelerate.utils import set_seed
 from diffusers import AutoencoderKL, DDPMScheduler, DiffusionPipeline, UNet2DConditionModel
 from diffusers.utils.import_utils import is_xformers_available
-from PIL import Image
+from PIL import Image, ImageFilter
 from torch.utils.data import Dataset
 from torchvision import transforms
 from tqdm import tqdm
@@ -41,6 +41,7 @@ import GPUtil
 import time
 import pickle
 from robust_facecloak.attacks.worker.differential_color_functions import rgb2lab_diff, ciede2000_diff
+import torchvision.transforms as transforms
 
 
 logger = get_logger(__name__)
@@ -642,6 +643,47 @@ def parse_args():
         type=float,
         default="1",
     )
+    # vkeilo add it
+    parser.add_argument(
+        "--time_select",
+        type=float,
+        default="1",
+    )
+    # vkeilo add it
+    parser.add_argument(
+        "--use_edge_filter",
+        type=int,
+        default=0,
+    )
+    
+    # vkeilo add it
+    parser.add_argument(
+        "--use_unet_noise",
+        type=int,
+        default=0,
+    )
+
+    # vkeilo add it
+    parser.add_argument(
+        "--use_text_noise",
+        type=int,
+        default=0,
+    )
+
+    # vkeilo add it
+    parser.add_argument(
+        "--unet_noise_r",
+        type=float,
+        default=0,
+    )
+
+    # vkeilo add it
+    parser.add_argument(
+        "--text_noise_r",
+        type=float,
+        default=0,
+    )
+    
     args = parser.parse_args()
     return args
 
@@ -756,8 +798,57 @@ def main(args):
     
     # original_data当前为原始扰动数据
     original_data= copy.deepcopy(perturbed_data)
-        
+    # print(original_data[0])
     import torchvision
+# vkeilo add it
+    class EdgeDetectionTransform:
+        def __init__(self, mode='sobel'):
+
+            assert mode in ['sobel'], f"Unsupported mode: {mode}"
+            self.mode = mode
+            
+            # Sobel 滤波器
+            self.sobel_x = torch.tensor([[-1, 0, 1],
+                                        [-2, 0, 2],
+                                        [-1, 0, 1]], dtype=torch.float32).unsqueeze(0).unsqueeze(0)
+            self.sobel_y = torch.tensor([[-1, -2, -1],
+                                        [ 0,  0,  0],
+                                        [ 1,  2,  1]], dtype=torch.float32).unsqueeze(0).unsqueeze(0)
+
+        def __call__(self, image):
+            """
+            执行边缘检测转换。
+            参数:
+            - image (Tensor): 输入图像张量，形状为 (C, H, W)
+            
+            返回:
+            - Tensor: 每个通道独立边缘检测后的三通道图像。
+            """
+            self.sobel_x = self.sobel_x.to(dtype=image.dtype, device=image.device)
+            self.sobel_y = self.sobel_y.to(dtype=image.dtype, device=image.device)
+            if self.mode == 'sobel':
+                edges = []
+                
+                # 对每个通道分别进行边缘检测
+                for c in range(image.shape[1]):
+                    channel = image[:,c:c+1, :, :]  # 获取单个通道
+                    print(channel.shape)
+                    edge_x = F.conv2d(channel, self.sobel_x, padding=1)
+                    edge_y = F.conv2d(channel, self.sobel_y, padding=1)
+                    
+                    # 计算梯度幅值
+                    magnitude = torch.sqrt(edge_x**2 + edge_y**2)
+                    
+                    # 如果需要将输出裁剪为[0, 1]范围
+                    magnitude = torch.clamp(magnitude, 0, 1)
+                    
+                    edges.append(magnitude.squeeze(0))  # 积累每个通道的边缘结果
+                
+                # 将三个通道的边缘图合并
+                edges = torch.stack(edges,2)
+            print(f"filtered image shape:{edges.shape}")
+            return edges.squeeze(1)
+
     # 定义训练和测试时的数据增强（图像处理）
     train_aug = [
             # 双线性插值到512x512
@@ -765,6 +856,9 @@ def main(args):
             # 裁剪
             transforms.CenterCrop(args.resolution) if args.center_crop else transforms.RandomCrop(args.resolution),
     ]
+    if args.use_edge_filter == 1:
+        print("Using edge filter")
+        train_aug = train_aug + [EdgeDetectionTransform()]
     # 图像随机旋转
     rotater = torchvision.transforms.RandomRotation(degrees=(0, args.rot_degree))
     # 高斯模糊

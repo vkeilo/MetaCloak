@@ -57,8 +57,10 @@ def generate_lin_interval_list(start, end, num):
     return np.linspace(start, end, num=num).tolist()
 
 # Define the possible values for each parameter
-# test_lable = "PAN_VGGFace2_r6_eval0_idx50_20250103"
-test_lable = "PAN_VGGFace2_r6_eval0_omiga2e-5_idx50_total120_hyperinterval2_20250107_part1"
+test_lable = "Ori_VGGFace2_r6_eval0_idx50_textnoise_total480_20250218_part1"
+# test_lable = "PAN_VGGFace2_r6_eval0_idx50_total360_timeselect2e-1_20250116_part1"
+# test_lable = "Orimetacloak_total480_id0_20250216_edgefilter_compare_partyes"
+# test_lable = "test_pan_id28_total120_timeselect200"
 repeat_times = 1
 params_options = {
     "MODEL_ROOT": ["${ADB_PROJECT_ROOT}"],
@@ -73,9 +75,9 @@ params_options = {
     "wandb_project_name": ["metacloak_PAN"],
     "mixed_precision": ["fp16"],
     "advance_steps": [2],
-    "total_trail_num": [2],
+    "total_trail_num": [4],
     "total_train_steps": [1000],
-    "total_gan_step":[360],
+    "total_gan_step":[480],
     "interval": [200],
     "dreambooth_training_steps": [1000],
     "step_size": [1],
@@ -86,18 +88,24 @@ params_options = {
     "sampling_times_theta": [1],
     "attack_pgd_step_num": [0],
     "attack_pgd_radius": [7],
-    "r": [6],
+    "r": [11],
     "rd": [11],
+    "time_select": [1],
     "SGLD_method": ["noSGLD"],
     "gauK": [7],
     "eval_gen_img_num": [16],
     "train_mode": ["gau"],
     "eval_mode": ["no"],
-    "img_save_interval":[60],
+    "img_save_interval":[120],
     "select_model_index":[0],
-    "attack_mode": ["pan"],
+    "attack_mode": ["pgd"],
     "pan_lambda_D": [0],
     "pan_lambda_S": [4e-7],  # Multiple values for pan_lambda_S
+    "use_edge_filter":[0],
+    "use_unet_noise":[0],
+    "use_text_noise":[1],
+    "unet_noise_r":[0.034866576443999764/1.8],
+    "text_noise_r":[0.023099106894149842],
     # 0.13894954943731375
     "pan_omiga": [0.13894954943731375],
     "pan_k": [2],  # Multiple values for pan_k
@@ -105,11 +113,66 @@ params_options = {
     "pan_use_val": ["last"],
     "Ltype":['ciede2000'],
     "interval_L": [300],
-    "min_L": [500],
-    "hpara_update_interval":[2],
+    "min_L": [800],
+    "hpara_update_interval":[5],
     "dynamic_mode":['L+m'],
-    "omiga_strength": ['2e-5'],
+    "omiga_strength": [2e-5]
 }
+
+# test_lable = "PAN_metacloak_nopan_idx50_total360_20250117_part4"
+# repeat_times = 1
+# params_options = {
+#     "MODEL_ROOT": ["${ADB_PROJECT_ROOT}"],
+#     "gen_model_path": ["${MODEL_ROOT}/SD/stable-diffusion-2-1-base"],
+#     "init_model_state_pool_pth_path": [
+#         "None"
+#         # "${MODEL_ROOT}/SD/init_model_state_pool_sd2-1.pth"
+#     ],
+#     "dataset_name": ["VGGFace2-clean"],
+#     "instance_name": [i for i in range(37,50)],
+#     "model_select_mode":["order"],
+#     "wandb_project_name": ["metacloak_PAN"],
+#     "mixed_precision": ["fp16"],
+#     "advance_steps": [2],
+#     "total_trail_num": [4],
+#     "total_train_steps": [1000],
+#     "total_gan_step":[360],
+#     "interval": [200],
+#     "dreambooth_training_steps": [1000],
+#     "step_size": [1],
+#     "unroll_steps": [1],
+#     "defense_sample_num": [1],
+#     "defense_pgd_step_num": [6],
+#     "sampling_times_delta": [1],
+#     "sampling_times_theta": [1],
+#     "attack_pgd_step_num": [0],
+#     "attack_pgd_radius": [7],
+#     "r": [6],
+#     "rd": [11],
+#     "time_select": [1],
+#     "SGLD_method": ["noSGLD"],
+#     "gauK": [7],
+#     "eval_gen_img_num": [16],
+#     "train_mode": ["gau"],
+#     "eval_mode": ["no"],
+#     "img_save_interval":[60],
+#     "select_model_index":[0],
+#     "attack_mode": ["pan"],
+#     "pan_lambda_D": [0],
+#     "pan_lambda_S": [0],  # Multiple values for pan_lambda_S
+#     # 0.13894954943731375
+#     "pan_omiga": [0],
+#     "pan_k": [0],  # Multiple values for pan_k
+#     "pan_mode": ["S"],
+#     "pan_use_val": ["last"],
+#     "Ltype":[''],
+#     "interval_L": [0],
+#     "min_L": [0],
+#     "hpara_update_interval":[5],
+#     "dynamic_mode":['L+m'],
+#     "omiga_strength": [0],
+#     "use_edge_filter": [False],
+# }
 
 
 for key, value in params_options.items():

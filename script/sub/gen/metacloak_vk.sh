@@ -81,6 +81,12 @@ if [ ! -d "$INSTANCE_DIR_CHECK" ]; then
     --hpara_update_interval=$hpara_update_interval \
     --dynamic_mode=$dynamic_mode \
     --omiga_strength=$omiga_strength \
+    --time_select=$time_select  \
+    --use_edge_filter=$use_edge_filter \
+    --use_unet_noise=$use_unet_noise \
+    --unet_noise_r=$unet_noise_r \
+    --use_text_noise=$use_text_noise \
+    --text_noise_r=$text_noise_r \
     """
     
     if [ "$train_mode" = "gau" ]; then
@@ -93,3 +99,9 @@ if [ ! -d "$INSTANCE_DIR_CHECK" ]; then
 else
   echo "instance dir exists"
 fi; 
+
+# 将生成的扰动加到原始图像中
+# python /data/home/yekai/github/MetaCloak/script/gen_final.py --path_a /data/home/yekai/github/MetaCloak/dataset/VGGFace2-clean/$instance_name/set_B  \
+#                     --path_b $OUTPUT_DIR/image_before_addding_noise \
+#                     --path_c $OUTPUT_DIR/noise-ckpt/final_ori \
+#                     --path_d $OUTPUT_DIR/noise-ckpt
