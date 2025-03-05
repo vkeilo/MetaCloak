@@ -18,7 +18,7 @@ export eval_model_path=$MODEL_ROOT/SD/stable-diffusion-2-1-base
 # export r=11 # the noise level of perturbation
 export gen_prompt=sks # the prompt used to craft the noise
 export eval_prompt=sks # the prompt used to do dreambooth training
-export dataset_name=VGGFace2-clean # for the Cele, change it to CelebA-HQ-clean
+# export dataset_name=VGGFace2-clean # for the Cele, change it to CelebA-HQ-clean
 # support method name: metacloak, clean
 export method_select=metacloak
 # the training mode, can be std or gau

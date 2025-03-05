@@ -57,10 +57,11 @@ def generate_lin_interval_list(start, end, num):
     return np.linspace(start, end, num=num).tolist()
 
 # Define the possible values for each parameter
-test_lable = "Ori_VGGFace2_r6_eval0_idx50_textnoise_total480_20250218_part1"
+# test_lable = "Ori_VGGFace2_r6_eval0_idx50_textnoise_total480_20250218_part1"
 # test_lable = "PAN_VGGFace2_r6_eval0_idx50_total360_timeselect2e-1_20250116_part1"
 # test_lable = "Orimetacloak_total480_id0_20250216_edgefilter_compare_partyes"
-# test_lable = "test_pan_id28_total120_timeselect200"
+# test_lable = "newloss_vfromclass2target_noisetext_idx50_r6_20250224"
+test_lable = "Orimetacloak_deltaSGLD_r6_eval0_idx50_total480_20250218_part2"
 repeat_times = 1
 params_options = {
     "MODEL_ROOT": ["${ADB_PROJECT_ROOT}"],
@@ -70,7 +71,7 @@ params_options = {
         # "${MODEL_ROOT}/SD/init_model_state_pool_sd2-1.pth"
     ],
     "dataset_name": ["VGGFace2-clean"],
-    "instance_name": [i for i in range(25)],
+    "instance_name": [i for i in range(25,50)],
     "model_select_mode":["order"],
     "wandb_project_name": ["metacloak_PAN"],
     "mixed_precision": ["fp16"],
@@ -84,14 +85,20 @@ params_options = {
     "unroll_steps": [1],
     "defense_sample_num": [1],
     "defense_pgd_step_num": [6],
-    "sampling_times_delta": [1],
+    "sampling_times_delta": [5],
     "sampling_times_theta": [1],
+    "sampling_noise_ratio": [0.2],
+    "sampling_step_delta":  [1e-3],
+    "sampling_step_theta":  [1e-5],
+    "beta_s": [0.3],
+    "beta_p": [0.3],
+    "mat_lambda_s": [0],
     "attack_pgd_step_num": [0],
     "attack_pgd_radius": [7],
-    "r": [11],
+    "r": [6],
     "rd": [11],
-    "time_select": [1],
-    "SGLD_method": ["noSGLD"],
+    "time_select": [0.3],
+    "SGLD_method": ["deltaSGLD"],
     "gauK": [7],
     "eval_gen_img_num": [16],
     "train_mode": ["gau"],
@@ -99,11 +106,12 @@ params_options = {
     "img_save_interval":[120],
     "select_model_index":[0],
     "attack_mode": ["pgd"],
+    "loss_mode":["mse"],
     "pan_lambda_D": [0],
     "pan_lambda_S": [4e-7],  # Multiple values for pan_lambda_S
     "use_edge_filter":[0],
     "use_unet_noise":[0],
-    "use_text_noise":[1],
+    "use_text_noise":[0],
     "unet_noise_r":[0.034866576443999764/1.8],
     "text_noise_r":[0.023099106894149842],
     # 0.13894954943731375

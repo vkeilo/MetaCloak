@@ -32,7 +32,7 @@ def load_data(data_dir,):
     images = [] 
     # for i in sorted(Path(data_dir).iterdir(), key=lambda x: str(x)):
     for i in list(Path(data_dir).iterdir()):
-        if not i.suffix in [".jpg", ".png", ".jpeg"]:
+        if not i.suffix in [".jpg", ".png", ".jpeg",".JPEG"]:
             continue
         else:
             images.append(image_to_numpy(Image.open(i).convert("RGB")))

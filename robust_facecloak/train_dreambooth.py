@@ -533,13 +533,19 @@ def infer(checkpoint_path, prompts=None, n_img=16, bs=8, n_steps=100, guidance_s
         out_path = f"{checkpoint_path}/dreambooth/{norm_prompt}"
         os.makedirs(out_path, exist_ok=True)
         for i in range(n_img // bs):
+            # vkeilo add it
+            # print(f"now batch order:{i}")
+
             images = pipe(
                 [prompt] * bs,
                 num_inference_steps=n_steps,
                 guidance_scale=guidance_scale,
+                # vkeilo add it
+                # tmp_id=i,
             ).images
             for idx, image in enumerate(images):
                 image.save(f"{out_path}/{i}_{idx}.png")
+                # pass
     del pipe
 
 

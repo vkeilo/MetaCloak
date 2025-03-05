@@ -15,7 +15,10 @@ import torch
 from piq import CLIPIQA, BRISQUELoss
 clipiqa = CLIPIQA()
 brisque = BRISQUELoss()
+import os
 ckpt = '../LIQE/checkpoints/LIQE.pt'
+if not os.path.exists(ckpt):
+    ckpt = "/data/home/yekai/github/MetaCloak/LIQE/checkpoints/LIQE.pt"
 import clip
 clip_model, clip_preprocess = clip.load("ViT-B/32")
 lieq_model = LIQE(ckpt, device = 'cuda' if torch.cuda.is_available() else 'cpu')

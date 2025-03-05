@@ -42,15 +42,152 @@ import time
 import pickle
 from robust_facecloak.attacks.worker.differential_color_functions import rgb2lab_diff, ciede2000_diff
 import torchvision.transforms as transforms
+from robust_facecloak.attacks.worker.get_v import get_identify_feature_latents
 
 
 logger = get_logger(__name__)
 
-import torch
-import torch.nn.functional as F
+# vkeilo add it
+def get_class2target_v_a(args,vae,trans,device = torch.device("cuda")):
+    weight_dtype = torch.float32
+    target_imgs = load_data(args.instance_data_dir_for_adversarial)
+    class_imgs = load_data(args.class_data_dir)
+    target_imgs_trans = trans(target_imgs).to(device, dtype=weight_dtype)
+    class_imgs_trans = trans(class_imgs).to(device, dtype=weight_dtype)
+    batch_size = 20
+    vae = vae.to(device, dtype = weight_dtype)
+    # print(f"vae:{vae.device},data:{target_imgs_trans.device}")
+    target_imgs_latens = vae.encode(target_imgs_trans).latent_dist.sample()
+    # class_imgs_latens = vae.encode(class_imgs_trans).latent_dist.sample()
+    class_imgs_latens = torch.tensor([]).to(device, dtype=weight_dtype)
+    for i in range(0, len(class_imgs), batch_size):
+        tmp_class_imgs_latens = vae.encode(class_imgs_trans[i:i+batch_size]).latent_dist.sample()
+        class_imgs_latens = torch.cat((class_imgs_latens, tmp_class_imgs_latens), dim=0)
+    random_imgs_latens = torch.randn([10000,4,64,64]).to(device)
+    mean_target_imgs_latens = torch.mean(target_imgs_latens, dim=0, keepdim=True).squeeze()
+    mean_class_imgs_latens = torch.mean(class_imgs_latens, dim=0, keepdim=True).squeeze()
+    mean_random_imgs_latens = torch.mean(random_imgs_latens, dim=0, keepdim=True).squeeze()
+    del random_imgs_latens
 
-# vkeilo add
-device_g = torch.device("cuda")
+    def get_orthog(x,y):
+        y_a = y / torch.norm(y)
+        x2y_pjt = (torch.dot(y,x)/torch.norm(y))*y_a
+        x2y_orthor = x - x2y_pjt
+        return x2y_orthor
+
+    rand2class = mean_class_imgs_latens - mean_random_imgs_latens
+    rand2target = mean_target_imgs_latens - mean_random_imgs_latens
+    class2target = mean_target_imgs_latens - mean_class_imgs_latens
+    # rand2class = torch.tensor([2,2]).to(dtype=args.weight_dtype)
+    # rand2target = torch.tensor([1,2]).to(dtype=args.weight_dtype)
+    # class2target = torch.tensor([-1,0]).to(dtype=args.weight_dtype)
+
+
+    rand2class_flat = rand2class.flatten()
+    rand2target_flat = rand2target.flatten()
+    class2target_flat = class2target.flatten()
+    mean_random_imgs_latens_flat = mean_random_imgs_latens.flatten()
+
+    rand2target_to_rand2class_orthog = get_orthog(rand2target_flat,rand2class_flat)
+    rand2target_to_rand2class_orthog_a = rand2target_to_rand2class_orthog/torch.norm(rand2target_to_rand2class_orthog)
+    # vkeilo change it 
+    # rand2target_to_rand2class_orthog_a = torch.randn_like(rand2target_to_rand2class_orthog_a)
+    # rand2target_to_rand2class_orthog_a = rand2target_to_rand2class_orthog_a/torch.norm(rand2target_to_rand2class_orthog_a)
+    for idx, feature in rand2target_to_rand2class_orthog_a:
+        if torch.dot(feature,class2target) < 0:
+            rand2target_to_rand2class_orthog_a[idx] = -rand2target_to_rand2class_orthog_a[idx]
+    return rand2target_to_rand2class_orthog_a
+
+
+def get_mixed_features_v_a(args,vae,trans,device = torch.device("cuda")):
+    weight_dtype = torch.float32
+    target_imgs = load_data(args.instance_data_dir_for_adversarial)
+    class_imgs = load_data(args.class_data_dir)
+    target_imgs_trans = trans(target_imgs).to(device, dtype=weight_dtype)
+    class_imgs_trans = trans(class_imgs).to(device, dtype=weight_dtype)
+    batch_size = 20
+    vae = vae.to(device, dtype = weight_dtype)
+    # print(f"vae:{vae.device},data:{target_imgs_trans.device}")
+    target_imgs_latens = vae.encode(target_imgs_trans).latent_dist.sample()
+    # class_imgs_latens = vae.encode(class_imgs_trans).latent_dist.sample()
+    class_imgs_latens = torch.tensor([]).to(device, dtype=weight_dtype)
+    for i in range(0, len(class_imgs), batch_size):
+        tmp_class_imgs_latens = vae.encode(class_imgs_trans[i:i+batch_size]).latent_dist.sample()
+        class_imgs_latens = torch.cat((class_imgs_latens, tmp_class_imgs_latens), dim=0)
+    random_imgs_latens = torch.randn([10000,4,64,64]).to(device)
+    mean_target_imgs_latens = torch.mean(target_imgs_latens, dim=0, keepdim=True).squeeze()
+    mean_class_imgs_latens = torch.mean(class_imgs_latens, dim=0, keepdim=True).squeeze()
+    mean_random_imgs_latens = torch.mean(random_imgs_latens, dim=0, keepdim=True).squeeze()
+    del random_imgs_latens
+
+    def get_some_principal_component(X,num):
+        """
+        输入:
+            X : Tensor of shape (200, 16000)
+            200个样本，每个样本16000维特征
+        
+        输出:
+            pc1 : Tensor of shape (1, 16000)
+            第一个主成分向量
+        """
+        # 数据标准化：中心化
+        X_centered = X - X.mean(dim=0, keepdim=True)  # 按列求均值
+        
+        # 奇异值分解 (SVD)
+        _, _, Vh = torch.linalg.svd(X_centered, full_matrices=False)
+        
+        # 第一主成分是右奇异矩阵的第一行
+        pc1 = Vh[:num, :]  # 保持输出形状为(1, 16000)
+        return pc1
+
+    rand2class = mean_class_imgs_latens - mean_random_imgs_latens
+    rand2target = mean_target_imgs_latens - mean_random_imgs_latens
+    class2target = mean_target_imgs_latens - mean_class_imgs_latens
+    # rand2class = torch.tensor([2,2]).to(dtype=args.weight_dtype)
+    # rand2target = torch.tensor([1,2]).to(dtype=args.weight_dtype)
+    # class2target = torch.tensor([-1,0]).to(dtype=args.weight_dtype)
+
+
+    rand2class_flat = rand2class.flatten()
+    rand2target_flat = rand2target.flatten()
+    class2target_flat = class2target.flatten()
+    mean_random_imgs_latens_flat = mean_random_imgs_latens.flatten()
+    class_imgs_latens_flat =  class_imgs_latens.flatten(1)
+    class_principal_component = get_some_principal_component(class_imgs_latens_flat,50)
+    feature_possi_list = [0] * len(class_principal_component)
+    feature_strength_list = [0] * len(class_principal_component)
+    for index,feature in enumerate(class_principal_component):
+        feature_strength = torch.dot(feature,class2target_flat)
+        if feature_strength>0:
+            feature_possi_list[index] += 1
+            feature_strength_list[index] += feature_strength
+        else:
+            feature_possi_list[index] -= 1
+            feature_strength_list[index] -= feature_strength
+
+    class_principal_component_all_positive_flag = [1] * len(class_principal_component)
+    class_principal_component_all_positive_idx = [i for i in range(len(class_principal_component))]
+
+    feature_strength_list_idx_sorted = sorted(range(len(feature_strength_list)), key=lambda i: feature_strength_list[i], reverse=True)
+    max_strength_num = 10
+    start = 0
+    final_feature_id = []
+    for id in feature_strength_list_idx_sorted[start:max_strength_num]:
+        if id in class_principal_component_all_positive_idx:
+            final_feature_id.append(id)
+
+    final_feature = []
+    for id in final_feature_id:
+        final_feature.append(class_principal_component[id]*class_principal_component_all_positive_flag[id])
+
+
+
+    mixed_feature = torch.zeros_like(final_feature[0])
+    for feature_id,feature_latents in zip(final_feature_id,final_feature):
+        mixed_feature += feature_latents * feature_strength_list[feature_id]
+    mixed_feature = mixed_feature/torch.norm(mixed_feature)
+
+    return mixed_feature
 
 
 # 针对模型的unet和文本编码器进行的训练
@@ -469,7 +606,7 @@ def parse_args():
     parser.add_argument(
         "--sampling_step_delta",
         type=float,
-        default=1e-5,
+        default=1e-3,
     )
 
     # vkeilo add it
@@ -478,6 +615,13 @@ def parse_args():
         "--sampling_noise_ratio",
         type=float,
         default=0.05,
+    )
+
+    # vkeilo add it
+    parser.add_argument(
+        "--mat_lambda_s",
+        type=float,
+        default=3,
     )
 
     # vkeilo add it
@@ -683,7 +827,13 @@ def parse_args():
         type=float,
         default=0,
     )
-    
+
+    # vkeilo add it
+    parser.add_argument(
+        "--loss_mode",
+        type=str,
+        default='mse',
+    )
     args = parser.parse_args()
     return args
 
@@ -1016,6 +1166,7 @@ def main(args):
             Image.fromarray(
                 img_pixel.float().detach().cpu().permute(1, 2, 0).numpy().squeeze().astype(np.uint8)
             ).save(save_path)
+    print(perturbed_data)
     save_image(perturbed_data, "load")
     
     init_model_state_pool = {}
@@ -1093,6 +1244,15 @@ def main(args):
     # 多次实验
     # total_iterations = args.epochs * len(train_dataloader)
     # model_state_num = steps_list*len(num_models)
+    # vkeilo add it
+    _, _, _, _, vae = MODEL_BANKS[j]
+    # args.class2target_v_a = get_class2target_v_a(args,vae,all_trans)
+    args.weight_dtype = perturbed_data.dtype
+    args.device = torch.device("cuda")
+    # args.class2target_v_a = get_identify_feature_latents(args,vae,all_trans)
+    args.class2target_v_a = get_mixed_features_v_a(args,vae,all_trans)
+    del vae
+    torch.cuda.empty_cache()
     assert args.model_select_mode in ['order','min_loss']
     print(f"avalaible model num: {num_models},available steps: {str(steps_list)},total train step :{str(args.total_train_steps)}")
     # 如果是平均顺序选择模型池中的模型

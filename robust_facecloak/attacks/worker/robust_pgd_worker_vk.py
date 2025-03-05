@@ -6,7 +6,21 @@ import torch.nn.functional as F
 
 # import lpips
 
+class FieldLoss(torch.nn.Module):
+    def __init__(self):
+        super(FieldLoss, self).__init__()
 
+    def forward(self, class2target_v_a,model_pred_latents,model_target_latents):
+        bsz = len(model_pred_latents)//len(class2target_v_a)
+        model_pred_latents_rsp = model_pred_latents.reshape([bsz,-1])
+        model_target_latents_rsp = model_target_latents.reshape([bsz,-1])
+        avg_impro_in_feild = 0
+        for batch in range(bsz):
+            pred_more = model_pred_latents_rsp[batch] - model_target_latents_rsp[batch]
+            impro_in_feild = torch.dot(pred_more,class2target_v_a)
+            avg_impro_in_feild += impro_in_feild/bsz
+        # add -  is classv  no - is -classv
+        return  - avg_impro_in_feild*avg_impro_in_feild
     
 class RobustPGDAttacker():
     def __init__(self, radius, steps, step_size, random_start, trans, sample_num, attacker, norm_type='l-infty', ascending=True, args=None, x_range=[0, 255], target_weight=1.0):        
@@ -34,6 +48,7 @@ class RobustPGDAttacker():
             f"sample_num: {self.sample_num}\n"
             # f"attacker: {self.attacker}\n", 
             f"x_range: {self.left} ~ {self.right}\n"
+            f"loss_mode: {self.args.loss_mode}\n"
         )
         self.target_weight = target_weight
     
@@ -52,30 +67,30 @@ class RobustPGDAttacker():
         # Add noise to the latents according to the noise magnitude at each timestep
         # (this is the forward diffusion process)
         noisy_latents = noise_scheduler.add_noise(adv_latens, noise, timesteps)
-        args=self.args
+        # args=self.args
         # vkeilo add it
         from copy import deepcopy
         text_encoder_noised = deepcopy(text_encoder)
         encoder_hidden_states = None
         noised_unet = deepcopy(unet)
-        if args.use_text_noise == 1:
+        if self.args.use_text_noise == 1:
             for param in text_encoder_noised.parameters():
-                        tmp_noise = torch.randn_like(param) * (args.text_noise_r)  # 生成与参数同大小的噪声
+                        tmp_noise = torch.randn_like(param) * (self.args.text_noise_r)  # 生成与参数同大小的噪声
                         param.add_(tmp_noise)
             encoder_hidden_states = text_encoder_noised(input_ids.to(device))[0]
         else:
             encoder_hidden_states = text_encoder(input_ids.to(device))[0]
 
-        if "robust_instance_conditioning_vector" in vars(args).keys() and args.robust_instance_conditioning_vector:
-            condition_vector = args.robust_instance_conditioning_vector_data
+        if "robust_instance_conditioning_vector" in vars(self.args).keys() and self.args.robust_instance_conditioning_vector:
+            condition_vector = self.args.robust_instance_conditioning_vector_data
             # print('this is your condition vector')
             # print(condition_vector.shape)
             encoder_hidden_states[0,:7,:] = condition_vector.to(device, dtype=weight_dtype)
 
         # vkeilo add it
-        if (args.use_unet_noise) == 1:
+        if (self.args.use_unet_noise) == 1:
             for param in noised_unet.parameters():
-                        tmp_noise = torch.randn_like(param) * (args.unet_noise_r)  # 生成与参数同大小的噪声
+                        tmp_noise = torch.randn_like(param) * (self.args.unet_noise_r)  # 生成与参数同大小的噪声
                         param.add_(tmp_noise)
             model_pred = noised_unet(noisy_latents, timesteps, encoder_hidden_states).sample
         else:
@@ -91,9 +106,14 @@ class RobustPGDAttacker():
 
 
         loss = 0.0
-        
-        mse_loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
-        
+        # vkeilo change it
+        mse_loss = None
+        if self.args.loss_mode == "mse":
+            mse_loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+        elif self.args.loss_mode == "classv":
+            loss_fn = FieldLoss()
+            mse_loss = loss_fn(self.args.class2target_v_a.to(device, dtype=weight_dtype),model_pred.flatten().to(device, dtype=weight_dtype), target.flatten().to(device, dtype=weight_dtype))
+            
         target_loss=0.0
         if target_tensor is not None:
             timesteps = timesteps.to('cpu')

@@ -58,8 +58,12 @@ if [ ! -d "$INSTANCE_DIR_CHECK" ]; then
     --mixed_precision=$mixed_precision \
     --sampling_times_theta=$sampling_times_theta \
     --sampling_times_delta=$sampling_times_delta \
-    --beta_s=0.3 \
-    --beta_p=0.3 \
+    --sampling_noise_ratio=$sampling_noise_ratio  \
+    --sampling_step_delta=$sampling_step_delta  \
+    --sampling_step_theta=$sampling_step_delta  \
+    --beta_s=$beta_s \
+    --beta_p=$beta_p \
+    --mat_lambda_s=$mat_lambda_s  \
     --wandb_run_name=$wandb_run_name \
     --wandb_project_name=$wandb_project_name \
     --SGLD_method=$SGLD_method \
@@ -87,6 +91,7 @@ if [ ! -d "$INSTANCE_DIR_CHECK" ]; then
     --unet_noise_r=$unet_noise_r \
     --use_text_noise=$use_text_noise \
     --text_noise_r=$text_noise_r \
+    --loss_mode=$loss_mode \
     """
     
     if [ "$train_mode" = "gau" ]; then
