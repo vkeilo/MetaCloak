@@ -22,6 +22,7 @@ class FieldLoss(torch.nn.Module):
         # add -  is classv  no - is -classv
         return  - avg_impro_in_feild*avg_impro_in_feild
     
+    
 class RobustPGDAttacker():
     def __init__(self, radius, steps, step_size, random_start, trans, sample_num, attacker, norm_type='l-infty', ascending=True, args=None, x_range=[0, 255], target_weight=1.0):        
         self.noattack = radius == 0. or steps == 0 or step_size == 0.
@@ -52,7 +53,8 @@ class RobustPGDAttacker():
         )
         self.target_weight = target_weight
     
-    def certi(self, models, adv_x,vae,  noise_scheduler, input_ids, device=torch.device("cuda"), weight_dtype=torch.float32, target_tensor=None,loss_type=None,ori_x=None):
+    # vkeilo add tokenizer
+    def certi(self, models, adv_x,vae,  noise_scheduler, input_ids, device=torch.device("cuda"), weight_dtype=torch.float32, target_tensor=None,loss_type=None,ori_x=None,tokenizer=None):
         # args=self.args
         unet, text_encoder = models
         adv_latens = vae.encode(adv_x.to(device, dtype=weight_dtype)).latent_dist.sample()
@@ -67,6 +69,8 @@ class RobustPGDAttacker():
         # Add noise to the latents according to the noise magnitude at each timestep
         # (this is the forward diffusion process)
         noisy_latents = noise_scheduler.add_noise(adv_latens, noise, timesteps)
+        # vkeilo add it
+        # noisy_latents_peg = noise_scheduler.add_noise(self.args.another_target_img_latents, noise, timesteps)
         # args=self.args
         # vkeilo add it
         from copy import deepcopy
@@ -99,8 +103,20 @@ class RobustPGDAttacker():
         # Get the target for loss depending on the prediction type
         if noise_scheduler.config.prediction_type == "epsilon":
             target = noise
+            # vkeilo change it 
+            # print("epsilon")
+            # input_ids_peg = tokenizer(
+            #     "a photo of a penguin",
+            #     truncation=True,
+            #     padding="max_length",
+            #     max_length=tokenizer.model_max_length,
+            #     return_tensors="pt",
+            # ).input_ids.repeat(len(adv_x), 1)
+            # encoder_hidden_states_peg = text_encoder(input_ids_peg.to(device))[0]
+            # model_pred_peg = unet(noisy_latents_peg, timesteps, encoder_hidden_states_peg).sample
         elif noise_scheduler.config.prediction_type == "v_prediction":
             target = noise_scheduler.get_velocity(adv_latens, noise, timesteps)
+
         else:
             raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
 
@@ -111,9 +127,19 @@ class RobustPGDAttacker():
         if self.args.loss_mode == "mse":
             mse_loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
         elif self.args.loss_mode == "classv":
-            loss_fn = FieldLoss()
-            mse_loss = loss_fn(self.args.class2target_v_a.to(device, dtype=weight_dtype),model_pred.flatten().to(device, dtype=weight_dtype), target.flatten().to(device, dtype=weight_dtype))
-            
+            # loss_fn = FieldLoss()
+            # mse_loss = loss_fn(self.args.class2target_v_a.to(device, dtype=weight_dtype),model_pred.flatten().to(device, dtype=weight_dtype), target.flatten().to(device, dtype=weight_dtype))
+            # mse_loss = -F.mse_loss(model_pred.float(), -target.float(), reduction="mean")
+            pred_flat = model_pred.float().flatten()
+            target_flat = target.float().flatten()
+            mse_loss = -(torch.dot(pred_flat/torch.norm(pred_flat), target_flat/torch.norm(target_flat))**2)
+            # mse_loss = -F.mse_loss(model_pred.float(), torch.randn_like(adv_latens).float(), reduction="mean")
+        elif self.args.loss_mode == "-noise":
+            mse_loss = -F.mse_loss(model_pred.float(), -target.float(), reduction="mean")
+        elif self.args.loss_mode == "dot0":
+            mse_loss = -(torch.dot(model_pred.float().flatten(), target.float().flatten())**2)
+        elif self.args.loss_mode == "randnoise":
+            mse_loss = -F.mse_loss(model_pred.float(), torch.randn_like(adv_latens).float(), reduction="mean")
         target_loss=0.0
         if target_tensor is not None:
             timesteps = timesteps.to('cpu')
@@ -207,7 +233,7 @@ class RobustPGDAttacker():
             with torch.no_grad():
                 # grad = x.grad.data
                 grad = gradd
-                if not self.ascending: 
+                if not self.ascending:
                     grad.mul_(-1)
                 if self.norm_type == 'l-infty':
                     x.add_(torch.sign(grad), alpha=self.step_size)
@@ -282,7 +308,7 @@ class RobustPGDAttacker():
                     models, def_x_trans, self.transform(ori_x), vae, tokenizer, noise_scheduler, 
                 )
                 # 在额外扰动的adv_x上评估模型鲁棒性
-                loss = self.certi(models, adv_x, vae, noise_scheduler, input_ids, device, weight_dtype, target_tensor,loss_type, ori_x,)
+                loss = self.certi(models, adv_x, vae, noise_scheduler, input_ids, device, weight_dtype, target_tensor,loss_type, ori_x,tokenizer = tokenizer)
                 loss_list.append(loss.item())
                 # 多次采样积累能够降低模型鲁棒性的梯度
                 loss.backward()
@@ -314,3 +340,4 @@ class RobustPGDAttacker():
         adv_x = adv_x + x
         adv_x.clamp_(self.left, self.right)
         return adv_x
+    
