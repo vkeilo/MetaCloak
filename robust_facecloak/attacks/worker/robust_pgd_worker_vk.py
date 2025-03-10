@@ -70,7 +70,9 @@ class RobustPGDAttacker():
         # (this is the forward diffusion process)
         noisy_latents = noise_scheduler.add_noise(adv_latens, noise, timesteps)
         # vkeilo add it
-        # noisy_latents_peg = noise_scheduler.add_noise(self.args.another_target_img_latents, noise, timesteps)
+        noise_antar = torch.randn_like(adv_latens)
+        # if self.args.loss_mode == "classv":
+        #     noisy_latents_antar = noise_scheduler.add_noise(self.args.another_target_img_latents, noise_antar, timesteps)
         # args=self.args
         # vkeilo add it
         from copy import deepcopy
@@ -105,15 +107,22 @@ class RobustPGDAttacker():
             target = noise
             # vkeilo change it 
             # print("epsilon")
-            # input_ids_peg = tokenizer(
-            #     "a photo of a penguin",
-            #     truncation=True,
-            #     padding="max_length",
-            #     max_length=tokenizer.model_max_length,
-            #     return_tensors="pt",
-            # ).input_ids.repeat(len(adv_x), 1)
-            # encoder_hidden_states_peg = text_encoder(input_ids_peg.to(device))[0]
-            # model_pred_peg = unet(noisy_latents_peg, timesteps, encoder_hidden_states_peg).sample
+            if self.args.loss_mode == "classv":
+                input_ids_antar = tokenizer(
+                    "a photo of a man",
+                    truncation=True,
+                    padding="max_length",
+                    max_length=tokenizer.model_max_length,
+                    return_tensors="pt",
+                ).input_ids.repeat(len(adv_x), 1)
+                encoder_hidden_states_antar = text_encoder(input_ids_antar.to(device))[0]
+                model_pred_antar = unet(noisy_latents, timesteps, encoder_hidden_states_antar).sample
+                # sp_num = 2
+                # model_pred.div_(sp_num)
+                # model_pred.add_(-unet(noisy_latents, timesteps, encoder_hidden_states_antar).sample.div_(sp_num))
+                # for _ in range(sp_num-1):
+                #     model_pred.add_(unet(noisy_latents, timesteps, encoder_hidden_states).sample.div_(sp_num))
+                #     model_pred.add_(-unet(noisy_latents, timesteps, encoder_hidden_states_antar).sample.div_(sp_num))
         elif noise_scheduler.config.prediction_type == "v_prediction":
             target = noise_scheduler.get_velocity(adv_latens, noise, timesteps)
 
@@ -129,17 +138,20 @@ class RobustPGDAttacker():
         elif self.args.loss_mode == "classv":
             # loss_fn = FieldLoss()
             # mse_loss = loss_fn(self.args.class2target_v_a.to(device, dtype=weight_dtype),model_pred.flatten().to(device, dtype=weight_dtype), target.flatten().to(device, dtype=weight_dtype))
-            # mse_loss = -F.mse_loss(model_pred.float(), -target.float(), reduction="mean")
-            pred_flat = model_pred.float().flatten()
-            target_flat = target.float().flatten()
-            mse_loss = -(torch.dot(pred_flat/torch.norm(pred_flat), target_flat/torch.norm(target_flat))**2)
+            # mse_loss = -F.mse_loss(model_pred,-model_pred)
+            mse_loss = -F.mse_loss(model_pred,model_pred_antar)
+            # mse_loss = -F.kl_div(model_pred_antar_list, model_pred_list, reduction='batchmean')
             # mse_loss = -F.mse_loss(model_pred.float(), torch.randn_like(adv_latens).float(), reduction="mean")
         elif self.args.loss_mode == "-noise":
             mse_loss = -F.mse_loss(model_pred.float(), -target.float(), reduction="mean")
         elif self.args.loss_mode == "dot0":
-            mse_loss = -(torch.dot(model_pred.float().flatten(), target.float().flatten())**2)
+            pred_flat = model_pred.float().flatten()
+            target_flat = target.float().flatten()
+            mse_loss = -(torch.dot(pred_flat/torch.norm(pred_flat), target_flat/torch.norm(target_flat))**2)
         elif self.args.loss_mode == "randnoise":
             mse_loss = -F.mse_loss(model_pred.float(), torch.randn_like(adv_latens).float(), reduction="mean")
+        else:
+            exit(f'mse_loss:{mse_loss} not support')
         target_loss=0.0
         if target_tensor is not None:
             timesteps = timesteps.to('cpu')
@@ -324,6 +336,9 @@ class RobustPGDAttacker():
                 else:
                     raise NotImplementedError
                 x = self._clip_(x, ori_x, ).detach_()
+            # vkeilo add it
+            # x.grad = None
+            # torch.cuda.empty_cache()
             # wandb.log({"Adversarial Loss": loss.item()})  
         ''' reopen autograd of model after pgd '''
         for mi in [text_encoder, unet]:
