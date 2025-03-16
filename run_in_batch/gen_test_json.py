@@ -61,7 +61,7 @@ def generate_lin_interval_list(start, end, num):
 # test_lable = "PAN_VGGFace2_r6_eval0_idx50_total360_timeselect2e-1_20250116_part1"
 # test_lable = "Orimetacloak_total480_id0_20250216_edgefilter_compare_partyes"
 # test_lable = "newloss_vfromclass2target_noisetext_idx50_r6_20250224"
-test_lable = "Orimetacloak_r6_eval0_idx50_total480_vpre_20250310"
+test_lable = "Orimetacloak_dataASPL50_r6_eval0_id0_total120_classv_prompt2Monet_20250316"
 repeat_times = 1
 params_options = {
     "MODEL_ROOT": ["${ADB_PROJECT_ROOT}"],
@@ -70,7 +70,7 @@ params_options = {
         "None"
         # "${MODEL_ROOT}/SD/init_model_state_pool_sd2-1.pth"
     ],
-    "dataset_name": ["VGGFace2-clean"],
+    "dataset_name": ["VGGFace2-AntiDR-ASPL"],
     "instance_name": [i for i in range(50)],
     "model_select_mode":["order"],
     "wandb_project_name": ["metacloak_PAN"],
@@ -106,8 +106,11 @@ params_options = {
     "img_save_interval":[120],
     "select_model_index":[0],
     "attack_mode": ["pgd"],
-    "loss_mode":["mse"],
-    "prediction_type":["v_prediction"],
+    "loss_mode":["classv"],
+    "classv_prompt": ["Oil painting in Monet's Water Lilies style"],
+    # "classv_prompt": ["The metaphysical essence of nonexistence","A person captured in extreme motion blur","Oil painting in Monet's Water Lilies style","Charcoal sketch with rough hatching","a pho to ofs ksp son","random noise","Solid color canvas","Jackie Chan","a big blue door","a baby with delicate skin","a black man"],
+    # "classv_prompt":["a photo of sks person","a big blue door","The metaphysical essence of nonexistence","Oil painting in Monet's Water Lilies style","Jackie Chan"],
+    # "prediction_type":["v_prediction"],
     "pan_lambda_D": [0],
     "pan_lambda_S": [4e-7],  # Multiple values for pan_lambda_S
     "use_edge_filter":[0],

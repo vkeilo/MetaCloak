@@ -1,3 +1,4 @@
+import hashlib
 import os
 import json
 import time
@@ -33,10 +34,16 @@ def test_one_args(args,test_lable):
     totle_step = os.getenv('total_train_steps')
     dataset_name = os.getenv('dataset_name')
     data_id = os.getenv('instance_name')
+    classv_prompt = os.getenv('classv_prompt')
+    classv_prompt_md5 = None
+    try:
+        classv_prompt_md5 = hashlib.md5(classv_prompt.encode('utf-8')).hexdigest()
+    except:
+        pass
     if os.getenv('total_gan_step') != "0":
         totle_step = 'totle' + os.getenv('total_gan_step')
     if os.getenv('attack_mode') in ["pgd"]:
-        os.environ["wandb_run_name"] = f"MAT-{dataset_name[:-6]}-id{data_id}-{totle_step}-{os.getenv('interval')}-{os.getenv('sampling_times_delta')}-{os.getenv('sampling_times_theta')}-x{os.getenv('defense_pgd_step_num')}x{os.getenv('attack_pgd_step_num')}s{os.getenv('defense_sample_num')}-radius{os.getenv('r')}-{os.getenv('SGLD_method')}-robust{os.getenv('attack_pgd_radius')}-{os.getenv('model_select_mode')}-{os.getenv('test_timestamp')}"
+        os.environ["wandb_run_name"] = f"MAT-{dataset_name[:-6]}-id{data_id}-{totle_step}-{os.getenv('interval')}-{os.getenv('sampling_times_delta')}-{os.getenv('sampling_times_theta')}-x{os.getenv('defense_pgd_step_num')}x{os.getenv('attack_pgd_step_num')}s{os.getenv('defense_sample_num')}-radius{os.getenv('r')}-{os.getenv('SGLD_method')}-robust{os.getenv('attack_pgd_radius')}-{os.getenv('model_select_mode')}-{('promptmd5'+classv_prompt_md5[:8]) if classv_prompt_md5 else ''}-{os.getenv('test_timestamp')}"
     elif os.getenv('attack_mode') in ["pan","EOTpan","panrobust"]:
         os.environ["wandb_run_name"] = f"MAT-PAN-{dataset_name[:-6]}-id{data_id}-{os.getenv('attack_mode')}-{totle_step}-{os.getenv('interval')}-{os.getenv('sampling_times_delta')}-{os.getenv('sampling_times_theta')}-x{os.getenv('defense_pgd_step_num')}x{os.getenv('attack_pgd_step_num')}s{os.getenv('defense_sample_num')}-radius{os.getenv('r')}-{os.getenv('SGLD_method')}-minL{os.getenv('min_L')}-Linterval{os.getenv('interval_L')}-robust{os.getenv('attack_pgd_radius')}-{os.getenv('model_select_mode')}-{os.getenv('pan_lambda_S')}-{os.getenv('pan_lambda_D')}-{os.getenv('pan_omiga')}-k={os.getenv('pan_k')}-use{os.getenv('pan_mode')}-{os.getenv('pan_use_val')}-omigas{os.getenv('omiga_strength')}-{os.getenv('test_timestamp')}"
     # python 实现 export test_timestamp=$(date +%s)

@@ -841,6 +841,13 @@ def parse_args():
         type=str,
         default='epsilon',
     )
+
+    # vkeilo add it
+    parser.add_argument(
+        "--classv_prompt",
+        type=str,
+        default='a pohto of sks person',
+    )
     args = parser.parse_args()
     return args
 

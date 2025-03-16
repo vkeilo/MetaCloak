@@ -66,6 +66,8 @@ class RobustPGDAttacker():
         # Sample a random timestep for each image
         timesteps = torch.randint(0, int(noise_scheduler.config.num_train_timesteps * self.args.time_select), (bsz,), device=adv_latens.device)
         timesteps = timesteps.long()
+        # timesteps_classv = torch.randint(0, int(noise_scheduler.config.num_train_timesteps * self.args.time_select * 0.1), (bsz,), device=adv_latens.device)
+        # timesteps_classv = timesteps.long()
         # Add noise to the latents according to the noise magnitude at each timestep
         # (this is the forward diffusion process)
         noisy_latents = noise_scheduler.add_noise(adv_latens, noise, timesteps)
@@ -109,7 +111,14 @@ class RobustPGDAttacker():
             # print("epsilon")
             if self.args.loss_mode == "classv":
                 input_ids_antar = tokenizer(
-                    "a photo of a man",
+                    self.args.classv_prompt,
+                    # "New York Architecture Complex",
+                    # "Van Gogh's Starry Sky Paintings",
+                    # "a post-impressionist car",
+                    # "Surrealist landscape with melting clocks",
+                    # "A person without face",
+                    # "A person whose eyes are replaced by burning galaxies",
+                    # "a ph oto of s ksper son",
                     truncation=True,
                     padding="max_length",
                     max_length=tokenizer.model_max_length,
@@ -139,7 +148,8 @@ class RobustPGDAttacker():
             # loss_fn = FieldLoss()
             # mse_loss = loss_fn(self.args.class2target_v_a.to(device, dtype=weight_dtype),model_pred.flatten().to(device, dtype=weight_dtype), target.flatten().to(device, dtype=weight_dtype))
             # mse_loss = -F.mse_loss(model_pred,-model_pred)
-            mse_loss = -F.mse_loss(model_pred,model_pred_antar)
+            mse_loss = -F.mse_loss(target.float(),model_pred_antar.float(), reduction="mean")
+            # mse_loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
             # mse_loss = -F.kl_div(model_pred_antar_list, model_pred_list, reduction='batchmean')
             # mse_loss = -F.mse_loss(model_pred.float(), torch.randn_like(adv_latens).float(), reduction="mean")
         elif self.args.loss_mode == "-noise":
@@ -327,7 +337,7 @@ class RobustPGDAttacker():
             # 根据当前梯度信息更新x
             with torch.no_grad():
                 grad = x.grad.data
-                
+                # print(torch.sign(grad))
                 if not self.ascending: 
                     grad.mul_(-1)
                     
