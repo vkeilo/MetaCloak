@@ -21,7 +21,39 @@ class FieldLoss(torch.nn.Module):
             avg_impro_in_feild += impro_in_feild/bsz
         # add -  is classv  no - is -classv
         return  - avg_impro_in_feild*avg_impro_in_feild
+
+def low_pass_filter(tensor, cutoff=1):
+    """
+    对 bx4x64x64 的 tensor 进行低通滤波，滤去高频部分
+    :param tensor: 输入张量 (bx4x64x64)
+    :param cutoff: 低通滤波器的截止频率（越小，保留的低频成分越少）
+    :return: 低通滤波后的张量
+    """
+    b, c, h, w = tensor.shape
+    assert h==w
+    cutoff = int(h*cutoff)
+    # 进行 2D FFT 变换到频域
+    fft_tensor = torch.fft.fft2(tensor, dim=(-2, -1))
+    fft_tensor = torch.fft.fftshift(fft_tensor, dim=(-2, -1))  # 把 DC 成分移到中心
     
+    # 构造低通滤波掩码
+    mask = torch.zeros((h, w), device=tensor.device)
+    center_h, center_w = h // 2, w // 2
+    for i in range(h):
+        for j in range(w):
+            if (i - center_h) ** 2 + (j - center_w) ** 2 <= cutoff ** 2:
+                mask[i, j] = 1  # 低频部分保留
+
+    # 应用掩码
+    mask = mask[None, None, :, :]  # 扩展维度以匹配 (b, c, h, w)
+    fft_filtered = fft_tensor * mask
+
+    # 逆变换回时域
+    fft_filtered = torch.fft.ifftshift(fft_filtered, dim=(-2, -1))  # 还原 DC 位置
+    filtered_tensor = torch.fft.ifft2(fft_filtered, dim=(-2, -1)).real  # 只取实部
+
+    return filtered_tensor
+
     
 class RobustPGDAttacker():
     def __init__(self, radius, steps, step_size, random_start, trans, sample_num, attacker, norm_type='l-infty', ascending=True, args=None, x_range=[0, 255], target_weight=1.0):        
@@ -50,6 +82,7 @@ class RobustPGDAttacker():
             # f"attacker: {self.attacker}\n", 
             f"x_range: {self.left} ~ {self.right}\n"
             f"loss_mode: {self.args.loss_mode}\n"
+            f"low_f_filter:{self.args.low_f_filter}\n"
         )
         self.target_weight = target_weight
     
@@ -337,6 +370,8 @@ class RobustPGDAttacker():
             # 根据当前梯度信息更新x
             with torch.no_grad():
                 grad = x.grad.data
+                if self.args.low_f_filter != -1:
+                    grad = low_pass_filter(grad.to(device='cpu',dtype = torch.float32),cutoff = self.args.low_f_filter).to(device = device,dtype=weight_dtype)
                 # print(torch.sign(grad))
                 if not self.ascending: 
                     grad.mul_(-1)

@@ -331,7 +331,9 @@ class PANAttacker():
         print(f'adv_image shape1:{adv_image.shape}')
 
         # 计算损失
-        loss = self.get_loss_D(f, adv_image_tran, adv_image, ori_image, vae, tokenizer, noise_scheduler)
+        loss_P_D = self.get_loss_D(f, adv_image_tran, adv_image, ori_image, vae, tokenizer, noise_scheduler)
+        
+        loss = loss_P_D
         
         # 缩放损失并反向传播
         # scaler.scale(loss).backward()
@@ -443,27 +445,28 @@ class PANAttacker():
     def get_pertubation_linf(self, adv_image,ori_image,mode = None):
         # if mode == "S":
             # pertubation_linf = torch.max(self.get_Linfty_norm(adv_image-ori_image))
+        # img_num = torch.tensor(adv_image.shape[0]).to(device=self.device,dtype=self.weight_dtype)
         result = torch.tensor(0.0, device=self.device)
         per_data = adv_image-ori_image
         # print(f'per_data: {per_data[0][0]}')
-        pix_num = per_data.shape[2] * per_data.shape[3]
+        # pix_num = per_data.shape[2] * per_data.shape[3]
         per_data_inr = torch.clamp(per_data - self.radius, min=0)
         # pertubation_linf = torch.max(self.get_Linfty_norm(per_data))
         if 'L2' in self.args.Ltype:
-            L2_n = torch.mean(self.get_L2_norm(per_data_inr)**self.k)
+            L2_n = torch.mean(self.get_L2_norm(per_data_inr)) 
             result += L2_n
         if 'L1' in self.args.Ltype:
-            L1_n = torch.mean(self.get_L1_norm(per_data)**self.k)
+            L1_n = torch.mean(self.get_L1_norm(per_data)) 
             result += L1_n
         if 'L0' in self.args.Ltype:
-            L0_rho = torch.mean(self.get_rho_norm(per_data).to(dtype=self.weight_dtype)**self.k)
+            L0_rho = torch.mean(self.get_rho_norm(per_data).to(dtype=self.weight_dtype))
             result += L0_rho
         # L2_n = torch.mean(self.get_L2_norm(per_data_inr))
         # L1_n = torch.mean(self.get_L1_norm(per_data))
         # L0_rho = torch.mean(self.get_rho_norm(per_data).to(dtype=self.weight_dtype))
         if 'ciede2000' in self.args.Ltype:
-            ciede2000_diff = self.get_ciede2000_diff(adv_image,ori_image)
-            result += torch.mean(ciede2000_diff**self.k)
+            ciede2000_diff = self.get_ciede2000_diff(adv_image,ori_image) 
+            result += torch.mean(ciede2000_diff)
         # result += pertubation_linf
         # result += L2_n
         # result += L1_n

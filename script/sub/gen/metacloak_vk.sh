@@ -93,6 +93,7 @@ if [ ! -d "$INSTANCE_DIR_CHECK" ]; then
     --text_noise_r=$text_noise_r \
     --loss_mode=$loss_mode \
     --classv_prompt=\"$classv_prompt\"  \
+    --low_f_filter=$low_f_filter  \
     """
     
     if [ "$train_mode" = "gau" ]; then

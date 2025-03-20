@@ -848,6 +848,12 @@ def parse_args():
         type=str,
         default='a pohto of sks person',
     )
+    # vkeilo add it
+    parser.add_argument(
+        "--low_f_filter",
+        type=float,
+        default=-1,
+    )
     args = parser.parse_args()
     return args
 
