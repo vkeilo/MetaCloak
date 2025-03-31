@@ -4,6 +4,7 @@ from PIL import Image
 import torchvision.transforms as transforms
 import torch.nn.functional as F
 
+import random
 # import lpips
 
 class FieldLoss(torch.nn.Module):
@@ -70,6 +71,8 @@ class RobustPGDAttacker():
         self.attacker = attacker
         self.left, self.right = x_range
         self.pattern = np.random.randint( 0, 72, size=(16, 16, 3), dtype=np.uint8)
+        self.time_window_pos = random.uniform(float(args.time_window_start), float(args.time_window_end))
+        self.time_window_len = float(args.time_window_len)
         print(
             "summary of the attacker: \n"
             f"radius: {radius}\n"
@@ -97,8 +100,27 @@ class RobustPGDAttacker():
         noise = torch.randn_like(adv_latens)
         bsz = adv_latens.shape[0]
         # Sample a random timestep for each image
-        timesteps = torch.randint(0, int(noise_scheduler.config.num_train_timesteps * self.args.time_select), (bsz,), device=adv_latens.device)
-        timesteps = timesteps.long()
+        timesteps = None
+        max_timestep = int(noise_scheduler.config.num_train_timesteps)
+        time_select_mode = 1
+        if self.args.diff_time_diff_loss == '1' or self.args.diff_time_diff_loss == '2':
+            if self.args.diff_time_diff_loss == '1':
+                time_select_mode = random.randint(0,1)
+            normal_time_range = torch.cat([
+                torch.arange(0, int(max_timestep * self.time_window_pos)),
+                torch.arange(int(max_timestep * (self.time_window_pos + self.time_window_len)), max_timestep)
+            ], dim=0)
+            attacked_time_range = torch.arange(int(max_timestep*self.time_window_pos), int(max_timestep*(self.time_window_pos+self.time_window_len)))
+            if time_select_mode==0:
+                # print("time no attack")
+                timesteps = normal_time_range[torch.randint(0, normal_time_range.shape[0], (bsz,))].to(device=adv_latens.device)
+            else:
+                # print("time attack")
+                timesteps = attacked_time_range[torch.randint(0, attacked_time_range.shape[0], (bsz,))].to(device=adv_latens.device)
+            timesteps = timesteps.long()
+        else:
+            timesteps = torch.randint(0, int(max_timestep * self.args.time_select), (bsz,), device=adv_latens.device)
+            timesteps = timesteps.long()
         # timesteps_classv = torch.randint(0, int(noise_scheduler.config.num_train_timesteps * self.args.time_select * 0.1), (bsz,), device=adv_latens.device)
         # timesteps_classv = timesteps.long()
         # Add noise to the latents according to the noise magnitude at each timestep
@@ -176,7 +198,15 @@ class RobustPGDAttacker():
         # vkeilo change it
         mse_loss = None
         if self.args.loss_mode == "mse":
-            mse_loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+            if self.args.diff_time_diff_loss == '0':
+                mse_loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+            else:
+                if time_select_mode == 1:
+                    print("attacking times")
+                    mse_loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+                else:
+                    print("no attacking times")
+                    mse_loss = -F.mse_loss(model_pred.float(), target.float(), reduction="mean")
         elif self.args.loss_mode == "classv":
             # loss_fn = FieldLoss()
             # mse_loss = loss_fn(self.args.class2target_v_a.to(device, dtype=weight_dtype),model_pred.flatten().to(device, dtype=weight_dtype), target.flatten().to(device, dtype=weight_dtype))
@@ -370,6 +400,9 @@ class RobustPGDAttacker():
             # 根据当前梯度信息更新x
             with torch.no_grad():
                 grad = x.grad.data
+                # vkeilo change it tmp
+                # print(grad.shape)
+                grad = grad.mean(dim=0).unsqueeze(0).repeat(adv_x.shape[0], 1, 1, 1)
                 if self.args.low_f_filter != -1:
                     grad = low_pass_filter(grad.to(device='cpu',dtype = torch.float32),cutoff = self.args.low_f_filter).to(device = device,dtype=weight_dtype)
                 # print(torch.sign(grad))

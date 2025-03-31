@@ -58,11 +58,13 @@ def generate_lin_interval_list(start, end, num):
 
 # Define the possible values for each parameter
 # test_lable = "Ori_VGGFace2_r6_eval0_idx50_textnoise_total480_20250218_part1"
-test_lable = "PAN_VGGFace2_r6rd6_eval0_idx50_total120_20250320_part1"
+# test_lable = "PAN_VGGFace2_r6rd6_eval0_idx50_lambdaS_5e-5_omigax10_total120_20250325"
 # test_lable = "Orimetacloak_total480_id0_20250216_edgefilter_compare_partyes"
 # test_lable = "newloss_vfromclass2target_noisetext_idx50_r6_20250224"
 # test_lable = "Orimetacloak_dataMetaCloak480_r6_train0eval0_id0_total120_timeselect03_classv_prompt2Monet_20250317"
 # test_lable = "Purl_PGDpeg_r30_20250318"
+# test_lable = "Orimetacloak_VGGFace2_r1to11_eval0_idx50_total480_mse_20250326_part2"
+test_lable = "PAN_VGGFace2_r11rd11_eval0_idx50_lambdaS_1e-4_omiga0599_total120_20250331"
 repeat_times = 1
 params_options = {
     "MODEL_ROOT": ["${ADB_PROJECT_ROOT}"],
@@ -77,9 +79,9 @@ params_options = {
     "wandb_project_name": ["metacloak_PAN"],
     "mixed_precision": ["fp16"],
     "advance_steps": [2],
-    "total_trail_num": [4],
+    "total_trail_num":[4],
     "total_train_steps": [1000],
-    "total_gan_step":[120],
+    "total_gan_step":[480],
     "interval": [200],
     "dreambooth_training_steps": [1000],
     "step_size": [1],
@@ -96,8 +98,8 @@ params_options = {
     "mat_lambda_s": [0],
     "attack_pgd_step_num": [0],
     "attack_pgd_radius": [7],
-    "r": [6],
-    "rd": [6],
+    "r": [11],
+    "rd": [11],
     "time_select": [1],
     "SGLD_method": ["noSGLD"],
     "gauK": [7],
@@ -106,8 +108,12 @@ params_options = {
     "eval_mode": ["no"],
     "img_save_interval":[120],
     "select_model_index":[0],
-    "attack_mode": ["pgd"],
-    "loss_mode":["pan"],
+    "attack_mode": ["pan"],
+    "loss_mode":["mse"],
+    "diff_time_diff_loss":["0"],
+    "time_window_start":['0.2'],
+    "time_window_end":['0.4'],
+    "time_window_len":['0.02'],
     # "classv_prompt": ["Oil painting in Monet's Water Lilies style"],
     "low_f_filter": [-1],
     # "classv_prompt": ["The metaphysical essence of nonexistence","A person captured in extreme motion blur","Oil painting in Monet's Water Lilies style","Charcoal sketch with rough hatching","a pho to ofs ksp son","random noise","Solid color canvas","Jackie Chan","a big blue door","a baby with delicate skin","a black man"],
@@ -115,7 +121,7 @@ params_options = {
     # "prediction_type":["v_prediction"],
     "pan_lambda_D": [0],
     # 【1e-4，2e-4，4e-4，8e-4，16e-4】
-    "pan_lambda_S": [4e-7],  # Multiple values for pan_lambda_S
+    "pan_lambda_S": [1e-4],  # Multiple values for pan_lambda_S
     "use_edge_filter":[0],
     "use_unet_noise":[0],
     "use_text_noise":[0],
@@ -123,7 +129,9 @@ params_options = {
     "text_noise_r":[0.023099106894149842],
     # 0.13894954943731375
     # [0.1, 0.129, 0.167, 0.215, 0.278, 0.359, 0.464, 0.599]
-    "pan_omiga": [0.13894954943731375],
+    # [0.774,1]
+    #  [0.1, 0.129, 0.167, 0.215, 0.278, 0.359, 0.464, 0.599,0.774,1]
+    "pan_omiga": [0.599],
     "pan_k": [2],  # Multiple values for pan_k
     "pan_mode": ["S"],
     "pan_use_val": ["last"],
@@ -133,9 +141,10 @@ params_options = {
     "hpara_update_interval":[5],
     "dynamic_mode":['L_only'],
     "omiga_strength": [2e-5]
+    
 }
 
-# test_lable = "PAN_metacloak_nopan_idx50_total360_20250117_part4"
+# test_lable = "Orimetacloak_VGGFace2_r6_eval0_idx50_total480_randomtimeattack_mse_20250326"
 # repeat_times = 1
 # params_options = {
 #     "MODEL_ROOT": ["${ADB_PROJECT_ROOT}"],
@@ -145,14 +154,14 @@ params_options = {
 #         # "${MODEL_ROOT}/SD/init_model_state_pool_sd2-1.pth"
 #     ],
 #     "dataset_name": ["VGGFace2-clean"],
-#     "instance_name": [i for i in range(37,50)],
+#     "instance_name": [i for i in range(50)],
 #     "model_select_mode":["order"],
 #     "wandb_project_name": ["metacloak_PAN"],
 #     "mixed_precision": ["fp16"],
 #     "advance_steps": [2],
-#     "total_trail_num": [4],
+#     "total_trail_num":[4],
 #     "total_train_steps": [1000],
-#     "total_gan_step":[360],
+#     "total_gan_step":[480],
 #     "interval": [200],
 #     "dreambooth_training_steps": [1000],
 #     "step_size": [1],
@@ -161,34 +170,60 @@ params_options = {
 #     "defense_pgd_step_num": [6],
 #     "sampling_times_delta": [1],
 #     "sampling_times_theta": [1],
+#     "sampling_noise_ratio": [0.2],
+#     "sampling_step_delta":  [1e-3],
+#     "sampling_step_theta":  [1e-5],
+#     "beta_s": [0.3],
+#     "beta_p": [0.3],
+#     "mat_lambda_s": [0],
 #     "attack_pgd_step_num": [0],
 #     "attack_pgd_radius": [7],
 #     "r": [6],
-#     "rd": [11],
+#     "rd": [6],
 #     "time_select": [1],
 #     "SGLD_method": ["noSGLD"],
 #     "gauK": [7],
 #     "eval_gen_img_num": [16],
 #     "train_mode": ["gau"],
 #     "eval_mode": ["no"],
-#     "img_save_interval":[60],
+#     "img_save_interval":[120],
 #     "select_model_index":[0],
-#     "attack_mode": ["pan"],
+#     "attack_mode": ["pgd"],
+#     "loss_mode":["mse"],
+#     "diff_time_diff_loss":["2"],
+#     "time_window_start":['0.05'],
+#     "time_window_end":['0.8'],
+#     "time_window_len":['0.04'],
+#     # "classv_prompt": ["Oil painting in Monet's Water Lilies style"],
+#     "low_f_filter": [-1],
+#     # "classv_prompt": ["The metaphysical essence of nonexistence","A person captured in extreme motion blur","Oil painting in Monet's Water Lilies style","Charcoal sketch with rough hatching","a pho to ofs ksp son","random noise","Solid color canvas","Jackie Chan","a big blue door","a baby with delicate skin","a black man"],
+#     # "classv_prompt":["a photo of sks person","a big blue door","The metaphysical essence of nonexistence","Oil painting in Monet's Water Lilies style","Jackie Chan"],
+#     # "prediction_type":["v_prediction"],
 #     "pan_lambda_D": [0],
-#     "pan_lambda_S": [0],  # Multiple values for pan_lambda_S
+#     # 【1e-4，2e-4，4e-4，8e-4，16e-4】
+#     "pan_lambda_S": [5e-5],  # Multiple values for pan_lambda_S
+#     "use_edge_filter":[0],
+#     "use_unet_noise":[0],
+#     "use_text_noise":[0],
+#     "unet_noise_r":[0.034866576443999764/1.8],
+#     "text_noise_r":[0.023099106894149842],
 #     # 0.13894954943731375
-#     "pan_omiga": [0],
-#     "pan_k": [0],  # Multiple values for pan_k
+#     # [0.1, 0.129, 0.167, 0.215, 0.278, 0.359, 0.464, 0.599]
+#     # [0.774,1]
+#     #  [0.1, 0.129, 0.167, 0.215, 0.278, 0.359, 0.464, 0.599,0.774,1]
+#     "pan_omiga": [0.1],
+#     "pan_k": [2],  # Multiple values for pan_k
 #     "pan_mode": ["S"],
 #     "pan_use_val": ["last"],
-#     "Ltype":[''],
+#     "Ltype":['ciede2000'],
 #     "interval_L": [0],
 #     "min_L": [0],
 #     "hpara_update_interval":[5],
-#     "dynamic_mode":['L+m'],
-#     "omiga_strength": [0],
-#     "use_edge_filter": [False],
+#     "dynamic_mode":['L_only'],
+#     "omiga_strength": [2e-5]
+    
 # }
+
 
 
 for key, value in params_options.items():

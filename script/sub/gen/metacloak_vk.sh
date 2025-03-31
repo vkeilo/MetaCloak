@@ -94,6 +94,10 @@ if [ ! -d "$INSTANCE_DIR_CHECK" ]; then
     --loss_mode=$loss_mode \
     --classv_prompt=\"$classv_prompt\"  \
     --low_f_filter=$low_f_filter  \
+    --diff_time_diff_loss=$diff_time_diff_loss  \
+    --time_window_start=$time_window_start  \
+    --time_window_end=$time_window_end  \
+    --time_window_len=$time_window_len  \
     """
     
     if [ "$train_mode" = "gau" ]; then

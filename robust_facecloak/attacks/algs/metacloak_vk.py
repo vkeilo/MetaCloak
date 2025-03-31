@@ -854,6 +854,30 @@ def parse_args():
         type=float,
         default=-1,
     )
+    # vkeilo add it
+    parser.add_argument(
+        "--diff_time_diff_loss",
+        type=str,
+        default='0',
+    )
+    # vkeilo add it
+    parser.add_argument(
+        "--time_window_start",
+        type=str,
+        default='200',
+    )
+    # vkeilo add it
+    parser.add_argument(
+        "--time_window_end",
+        type=str,
+        default='300',
+    )
+    # vkeilo add it
+    parser.add_argument(
+        "--time_window_len",
+        type=str,
+        default='0.02',
+    )
     args = parser.parse_args()
     return args
 
