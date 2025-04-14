@@ -63,8 +63,11 @@ def generate_lin_interval_list(start, end, num):
 # test_lable = "newloss_vfromclass2target_noisetext_idx50_r6_20250224"
 # test_lable = "Orimetacloak_dataMetaCloak480_r6_train0eval0_id0_total120_timeselect03_classv_prompt2Monet_20250317"
 # test_lable = "Purl_PGDpeg_r30_20250318"
-# test_lable = "Orimetacloak_VGGFace2_r1to11_eval0_idx50_total480_mse_20250326_part2"
-test_lable = "PAN_VGGFace2_r11rd11_eval0_idx50_lambdaS_1e-4_omiga0599_total120_20250331"
+# test_lable = "Orimetacloak_VGGFace2_r6_eval0_idx50_total480_timestepfinal200_vpre_20250409_p2"
+# test_lable = "PAN_VGGFace2_r7rd7_eval0_idx50_lambdaS_1e-4_omiga0599_total120_20250401"
+# test_lable = "PAN_VGGFace2_r10rd10_eval0_idx50_lambdaS_1e-4_omiga0599_total120_20250401_x-22"
+test_lable = "LF_test_sametime07_r11_20250411_p3"
+# test_lable = "CW_test3"
 repeat_times = 1
 params_options = {
     "MODEL_ROOT": ["${ADB_PROJECT_ROOT}"],
@@ -74,7 +77,8 @@ params_options = {
         # "${MODEL_ROOT}/SD/init_model_state_pool_sd2-1.pth"
     ],
     "dataset_name": ["VGGFace2-clean"],
-    "instance_name": [i for i in range(50)],
+    "instance_name": [i for i in range(33,50)],
+    # "instance_name": [0],
     "model_select_mode":["order"],
     "wandb_project_name": ["metacloak_PAN"],
     "mixed_precision": ["fp16"],
@@ -100,7 +104,7 @@ params_options = {
     "attack_pgd_radius": [7],
     "r": [11],
     "rd": [11],
-    "time_select": [1],
+    "time_select": [0.5],
     "SGLD_method": ["noSGLD"],
     "gauK": [7],
     "eval_gen_img_num": [16],
@@ -108,8 +112,8 @@ params_options = {
     "eval_mode": ["no"],
     "img_save_interval":[120],
     "select_model_index":[0],
-    "attack_mode": ["pan"],
-    "loss_mode":["mse"],
+    "attack_mode": ["pgd"],
+    "loss_mode":["lf"],
     "diff_time_diff_loss":["0"],
     "time_window_start":['0.2'],
     "time_window_end":['0.4'],

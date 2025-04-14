@@ -5,7 +5,7 @@ import torchvision.transforms as transforms
 import torch.nn.functional as F
 # vkeilo add it
 import torch.nn as nn
-
+import torch_dct as dct
 import random
 # import lpips
 
@@ -58,7 +58,7 @@ def low_pass_filter(tensor, cutoff=1):
     return filtered_tensor
 
     
-class RobustPGDAttacker():
+class RobustDCTPGDAttacker():
     def __init__(self, radius, steps, step_size, random_start, trans, sample_num, attacker, norm_type='l-infty', ascending=True, args=None, x_range=[0, 255], target_weight=1.0):        
         self.noattack = radius == 0. or steps == 0 or step_size == 0.
         self.radius = radius-1
@@ -293,7 +293,8 @@ class RobustPGDAttacker():
     
         ori_x = ori_x.detach().clone().to(device, dtype=weight_dtype)
         x = x.detach().clone().to(device, dtype=weight_dtype)
-        
+        ori_x_dct = dct_2d(ori_x)
+        x_dct = dct_2d(x)
         
         if self.random_start:
             r=self.radius
@@ -374,8 +375,9 @@ class RobustPGDAttacker():
         
         ori_x = ori_x.detach().clone().to(device, dtype=weight_dtype)
         x = x.detach().clone().to(device, dtype=weight_dtype)
-        
-        
+        # ori_x_dct = dct.dct_2d(ori_x)
+        x_dct = dct.dct_2d(x.to(device='cpu',dtype=torch.float32)).to(device=device, dtype=weight_dtype)
+
         if self.noattack:
             print("defender no need to defend")
             return x
@@ -390,10 +392,11 @@ class RobustPGDAttacker():
                
         # 初始化随机扰动
         if self.random_start:
-            r=self.radius
-            r_noise = torch.zeros_like(x).uniform_(-r, r)
-            r_x=x+r_noise
-            x=self._clip_(r_x, x)
+            exit("random_start not support")
+            # r=self.radius
+            # r_noise = torch.zeros_like(x).uniform_(-r, r)
+            # r_x=x+r_noise
+            # x=self._clip_(r_x, x)
             
         input_ids = tokenizer(
             args.instance_prompt,
@@ -403,13 +406,15 @@ class RobustPGDAttacker():
             return_tensors="pt",
         ).input_ids.repeat(len(x), 1)
         
-        x.requires_grad_(True)
+        x_dct.requires_grad_(True)
         # 多次采样
         loss_list = []
         print(f'defender start {self.steps} steps perturb')
         for _step in range(self.steps):
             print(f'\tdefender {_step}/{self.steps} step perturb')
-            x.requires_grad = True
+            x_dct.requires_grad = True
+            x = dct.dct_2d(x_dct.to(device='cpu',dtype=torch.float32)).to(device=device, dtype=weight_dtype)
+
             print(f'\tdefender start {self.sample_num} samples perturb')
             # 默认一次更新就对抗扰动一次
             for _sample in range(self.sample_num):
@@ -428,21 +433,20 @@ class RobustPGDAttacker():
                 loss.backward()
             # 根据当前梯度信息更新x
             with torch.no_grad():
-                grad = x.grad.data
-                # print(grad)
+                grad = x_dct.grad.data
+                print(grad)
                 # print("no same r")
                 # print(grad[0])
                 # print(grad[1])
-                if self.args.low_f_filter != -1:
-                    grad = low_pass_filter(grad.to(device='cpu',dtype = torch.float32),cutoff = self.args.low_f_filter).to(device = device,dtype=weight_dtype)
                 # print(torch.sign(grad))
                 if not self.ascending: 
                     grad.mul_(-1)
                     
                 if self.norm_type == 'l-infty':
-                    x.add_(torch.sign(grad), alpha=self.step_size)
+                    x_dct.add_(torch.sign(grad), alpha=self.step_size)
                 else:
                     raise NotImplementedError
+                x = dct.idct_2d(x_dct.to(device='cpu',dtype=torch.float32)).to(device=device, dtype=weight_dtype)
                 x = self._clip_(x, ori_x, ).detach_()
             # vkeilo add it
             # x.grad = None

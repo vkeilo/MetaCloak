@@ -1081,6 +1081,7 @@ def main(args):
     
     from robust_facecloak.attacks.worker.robust_pgd_worker_vk import RobustPGDAttacker
     from robust_facecloak.attacks.worker.robust_pan_worker_vk import RobustPANAttacker
+    from robust_facecloak.attacks.worker.robust_cw_worker_vk import RobustCWAttacker
     from MetaCloak.robust_facecloak.attacks.worker.pgd_worker import PGDAttacker
     from MetaCloak.robust_facecloak.attacks.worker.pan_worker import PANAttacker
     # 构建攻击者和防御者，攻击者使用PGD算法
@@ -1178,7 +1179,30 @@ def main(args):
             # vkeilo add it
             # step_sample_num=args.sampling_times_delta
         )
-
+    elif args.attack_mode in ['cw']:
+        attacker = PGDAttacker(
+            radius=args.attack_pgd_radius, 
+            steps=args.attack_pgd_step_num, 
+            step_size=args.attack_pgd_step_size,
+            random_start=args.attack_pgd_random_start,
+            ascending=args.attack_pgd_ascending,
+            args=args, 
+            x_range=[-1, 1],
+        )
+        defender = RobustCWAttacker(
+            radius=args.defense_pgd_radius,
+            steps=args.defense_pgd_step_num, # 6
+            step_size=args.defense_pgd_step_size,
+            random_start=args.defense_pgd_random_start,
+            ascending=args.defense_pgd_ascending,
+            args=args,
+            attacker=attacker, 
+            trans=all_trans,
+            sample_num=args.defense_sample_num,
+            x_range=[0, 255],
+            # vkeilo add it
+            # step_sample_num=args.sampling_times_delta
+        )
     # 模型加载，本次实验只有一个
     print(f'args model path:{args.pretrained_model_name_or_path}')
     model_paths = list(args.pretrained_model_name_or_path.split(","))
@@ -1347,7 +1371,7 @@ def main(args):
                             print(f'sample delta {k}/{args.sampling_times_delta} times')
                             # vkeilo add it
                             # adv_x_ori = perturbed_data.clone()
-                            if args.attack_mode in ["pgd","EOTpan","panrobust"]:
+                            if args.attack_mode in ["pgd","EOTpan","panrobust","cw"]:
                                 perturbed_data,rubust_loss = defender.perturb(f, perturbed_data, original_data, vae, tokenizer, noise_scheduler,)
                             elif args.attack_mode in ["pan"]:
                                 perturbed_data,perturbed_data_D,rubust_loss = attacker.attack(f, original_data, vae, tokenizer, noise_scheduler,)

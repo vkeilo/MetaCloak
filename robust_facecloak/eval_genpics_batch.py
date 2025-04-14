@@ -3,7 +3,7 @@ import os
 import sys
 import torch
 sys.path.append("/data/home/yekai/github/MetaCloak")
-
+import re
 # from eval_score import get_score
 import numpy as np
 from robust_facecloak.attacks.worker.differential_color_functions import rgb2lab_diff, ciede2000_diff
@@ -64,11 +64,20 @@ def get_ciede2000_diff(ori_imgs,advimgs):
 # noisy_pics_dir = "/data/home/yekai/github/mypro/MetaCloak/exp_data-ori/gen_output/release-MetaCloak-advance_steps-2-total_trail_num-4-unroll_steps-1-interval-200-total_train_steps-1000-SD21base-robust-gauK-7/dataset-VGGFace2-clean-r-11-model-SD21base-gen_prompt-sks/0/noise-ckpt/final"
 # gen_pics_dir = "/data/home/yekai/github/mypro/MetaCloak/exp_data-ori/train_output/release-MetaCloak-advance_steps-2-total_trail_num-4-unroll_steps-1-interval-200-total_train_steps-1000-SD21base-robust-gauK-7-gau-gau-eval/gen-release-MetaCloak-advance_steps-2-total_trail_num-4-unroll_steps-1-interval-200-total_train_steps-1000-SD21base-robust-gauK-7-dataset-VGGFace2-clean-r-11-model-SD21base-gen_prompt-sks-eval-gau-rate-/0_DREAMBOOTH/checkpoint-1000/dreambooth/a_photo_of_sks_person"
 
-target_path = "/data/home/yekai/github/MetaCloak/exp_datas_output_antidrm/SimAC_VGGFace2_random50v1_r6"
-rounds = "50"
+target_path = "/data/home/yekai/github/MetaCloak/exp_datas_output_antidrm/Orimetacloak4_total480_r6_idx50"
+rounds = "480"
 os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 score_dict = {"max_noise_r":[],"noise_L0":[],"pix_change_mean":[],"change_area_mean":[],"ciede2000_score":[]}
-for exp_dir in os.listdir(target_path):
+
+def extract_id(s):
+    match = re.search(r'-id(\d+)-', s)
+    return int(match.group(1)) if match else float('inf')
+
+dir_list= os.listdir(target_path)
+sorted_dirlist = sorted(dir_list, key=extract_id)
+
+for exp_dir in sorted_dirlist:
+    print(exp_dir)
     exp_pahth = os.path.join(target_path,exp_dir)
     clean_ref_dir = os.path.join(exp_pahth,'image_clean')
     ori_pics_dir = os.path.join(exp_pahth,"image_before_addding_noise")
@@ -110,8 +119,12 @@ all_change_area_mean = sum(score_dict['change_area_mean'])/data_len
 all_ciede2000_score = sum(score_dict['ciede2000_score'])/data_len
 
 
+
 print(f"max_noise_r {all_max_noise_r:.2f}")
 print(f"noise_L0 {all_noise_L0:.2f}")
 print(f"pix_change_mean {all_pix_change_mean:.2f}")
 print(f"change_area_mean {all_change_area_mean:.2f}")
 print(f"ciede2000_score {all_ciede2000_score:.6f}")
+print(len(score_dict['ciede2000_score']))
+for i in [t.item() for t in score_dict['ciede2000_score']]:
+    print(f"{i:3f}")

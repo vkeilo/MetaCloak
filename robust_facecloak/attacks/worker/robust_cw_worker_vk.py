@@ -3,8 +3,6 @@ import numpy as np
 from PIL import Image
 import torchvision.transforms as transforms
 import torch.nn.functional as F
-# vkeilo add it
-import torch.nn as nn
 
 import random
 # import lpips
@@ -58,10 +56,10 @@ def low_pass_filter(tensor, cutoff=1):
     return filtered_tensor
 
     
-class RobustPGDAttacker():
+class RobustCWAttacker():
     def __init__(self, radius, steps, step_size, random_start, trans, sample_num, attacker, norm_type='l-infty', ascending=True, args=None, x_range=[0, 255], target_weight=1.0):        
         self.noattack = radius == 0. or steps == 0 or step_size == 0.
-        self.radius = radius-1
+        self.radius = radius
         self.step_size = step_size
         self.steps = steps # how many step to conduct pgd
         self.random_start = random_start
@@ -97,9 +95,6 @@ class RobustPGDAttacker():
         unet, text_encoder = models
         adv_latens = vae.encode(adv_x.to(device, dtype=weight_dtype)).latent_dist.sample()
         adv_latens = adv_latens * vae.config.scaling_factor
-
-        ori_latens = vae.encode(ori_x.to(device, dtype=weight_dtype)).latent_dist.sample()
-        ori_latens = ori_latens * vae.config.scaling_factor
         
         # Sample noise that we'll add to the latents
         noise = torch.randn_like(adv_latens)
@@ -107,69 +102,32 @@ class RobustPGDAttacker():
         # Sample a random timestep for each image
         timesteps = None
         max_timestep = int(noise_scheduler.config.num_train_timesteps)
-        timesteps = torch.randint(0, int(max_timestep * abs(self.args.time_select)), (bsz,), device=adv_latens.device)
-        if self.args.loss_mode == "lf":
-            # timesteps 固定为 int(max_timestep * abs(self.args.time_select)，其它条件相同
-            timesteps = torch.tensor(int(max_timestep * abs(self.args.time_select)), device=adv_latens.device).repeat(bsz)
-        if self.args.time_select < 0:
-            timesteps = max_timestep - timesteps - 1
-        timesteps = timesteps.long()
+        time_select_mode = 1
+        if self.args.diff_time_diff_loss == '1' or self.args.diff_time_diff_loss == '2':
+            if self.args.diff_time_diff_loss == '1':
+                time_select_mode = random.randint(0,1)
+            normal_time_range = torch.cat([
+                torch.arange(0, int(max_timestep * self.time_window_pos)),
+                torch.arange(int(max_timestep * (self.time_window_pos + self.time_window_len)), max_timestep)
+            ], dim=0)
+            attacked_time_range = torch.arange(int(max_timestep*self.time_window_pos), int(max_timestep*(self.time_window_pos+self.time_window_len)))
+            if time_select_mode==0:
+                # print("time no attack")
+                timesteps = normal_time_range[torch.randint(0, normal_time_range.shape[0], (bsz,))].to(device=adv_latens.device)
+            else:
+                # print("time attack")
+                timesteps = attacked_time_range[torch.randint(0, attacked_time_range.shape[0], (bsz,))].to(device=adv_latens.device)
+            timesteps = timesteps.long()
+        else:
+            timesteps = torch.randint(0, int(max_timestep * self.args.time_select), (bsz,), device=adv_latens.device)
+            timesteps = timesteps.long()
         # timesteps_classv = torch.randint(0, int(noise_scheduler.config.num_train_timesteps * self.args.time_select * 0.1), (bsz,), device=adv_latens.device)
         # timesteps_classv = timesteps.long()
         # Add noise to the latents according to the noise magnitude at each timestep
         # (this is the forward diffusion process)
         noisy_latents = noise_scheduler.add_noise(adv_latens, noise, timesteps)
-        if self.args.loss_mode == "lf":
-            ori_latens = vae.encode(ori_x.to(device, dtype=weight_dtype)).latent_dist.sample()
-            ori_latens = ori_latens * vae.config.scaling_factor
-            noisy_latents_ori = noise_scheduler.add_noise(ori_latens, noise, timesteps)
-            def gaussian_kernel_2d(kernel_size=15, sigma=3.0):
-                x = torch.arange(kernel_size).float() - (kernel_size - 1) / 2
-                g = torch.exp(-x**2 / (2*sigma**2))
-                g /= g.sum()
-                kernel_2d = g[:, None] * g[None, :]
-                kernel_2d = kernel_2d.unsqueeze(0).unsqueeze(0)
-                return kernel_2d.to(device, dtype=weight_dtype)
-
-            class LowFreqKLLoss(nn.Module):
-                """
-                先做高斯模糊，保留低频后，以 KL 散度作为度量。
-                需要注意：KL 散度需要输入是有效的概率分布(>=0, sum=1)，
-                因此这里先做 softmax 进行归一化。
-                """
-                def __init__(self, kernel_size=15, sigma=3.0):
-                    super().__init__()
-                    self.kernel_size = kernel_size
-                    self.sigma = sigma
-                    self.register_buffer('gauss_kernel', gaussian_kernel_2d(kernel_size, sigma))
-
-                def forward(self, x, y):
-                    B, C, H, W = x.shape
-                    x_blur = F.conv2d(x, self.gauss_kernel.repeat(C, 1, 1, 1), 
-                                    padding=self.kernel_size//2, 
-                                    groups=C)
-                    y_blur = F.conv2d(y, self.gauss_kernel.repeat(C, 1, 1, 1), 
-                                    padding=self.kernel_size//2, 
-                                    groups=C)
-
-                    # 作为概率分布，需要先 flatten 或者保留 (C,H,W) 结构都可以
-                    # 下面演示简单版本：对 (C,H,W) 逐元素做 softmax
-                    x_probs = F.softmax(x_blur.reshape(B, -1), dim=1)  # shape [B, C*H*W]
-                    y_probs = F.softmax(y_blur.reshape(B, -1), dim=1)
-
-                    # PyTorch 提供的 kl_div(input, target, reduction='batchmean') 是计算 KL(P||Q)，
-                    # 其中 input = log(P)， target = Q
-                    # 所以要先对 x_probs 做对数
-                    x_log_probs = torch.log(x_probs + 1e-10)
-
-                    kl = F.kl_div(x_log_probs, y_probs, reduction='batchmean')
-                    return kl
-            criterion = LowFreqKLLoss(kernel_size=3)
-            loss = criterion(noisy_latents, noisy_latents_ori)
-            print(f"return loss: {loss.item()}")
-            return loss
         # vkeilo add it
-        noise_antar = torch.randn_like(adv_latens)
+        # noise_antar = torch.randn_like(adv_latens)
         # if self.args.loss_mode == "classv":
         #     noisy_latents_antar = noise_scheduler.add_noise(self.args.another_target_img_latents, noise_antar, timesteps)
         # args=self.args
@@ -178,13 +136,7 @@ class RobustPGDAttacker():
         text_encoder_noised = deepcopy(text_encoder)
         encoder_hidden_states = None
         noised_unet = deepcopy(unet)
-        if self.args.use_text_noise == 1:
-            for param in text_encoder_noised.parameters():
-                        tmp_noise = torch.randn_like(param) * (self.args.text_noise_r)  # 生成与参数同大小的噪声
-                        param.add_(tmp_noise)
-            encoder_hidden_states = text_encoder_noised(input_ids.to(device))[0]
-        else:
-            encoder_hidden_states = text_encoder(input_ids.to(device))[0]
+        encoder_hidden_states = text_encoder(input_ids.to(device))[0]
 
         if "robust_instance_conditioning_vector" in vars(self.args).keys() and self.args.robust_instance_conditioning_vector:
             condition_vector = self.args.robust_instance_conditioning_vector_data
@@ -232,10 +184,8 @@ class RobustPGDAttacker():
         loss = 0.0
         # vkeilo change it
         mse_loss = None
-        
         if self.args.loss_mode == "mse":
             mse_loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
-
         elif self.args.loss_mode == "classv":
             # loss_fn = FieldLoss()
             # mse_loss = loss_fn(self.args.class2target_v_a.to(device, dtype=weight_dtype),model_pred.flatten().to(device, dtype=weight_dtype), target.flatten().to(device, dtype=weight_dtype))
@@ -374,7 +324,14 @@ class RobustPGDAttacker():
         
         ori_x = ori_x.detach().clone().to(device, dtype=weight_dtype)
         x = x.detach().clone().to(device, dtype=weight_dtype)
-        
+
+        # vkeilo add for cw
+        def artanh(x):
+            return 0.5 * torch.log((1 + x) / (1 - x))
+        ori_adv_part = (x - ori_x)/self.radius
+        ori_adv_part = torch.clamp(ori_adv_part, -0.999, 0.999)
+        adv_part_map = artanh((x - ori_x)/self.radius)
+        # adv_part  = self.radius * torch.tanh(adv_part_map)
         
         if self.noattack:
             print("defender no need to defend")
@@ -403,24 +360,29 @@ class RobustPGDAttacker():
             return_tensors="pt",
         ).input_ids.repeat(len(x), 1)
         
-        x.requires_grad_(True)
+        # x.requires_grad_(True)
+        adv_part_map.requires_grad_(True)
+        # ori_adv_part.requires_grad_(True)
+        # adv_part.requires_grad_(True)
         # 多次采样
         loss_list = []
         print(f'defender start {self.steps} steps perturb')
         for _step in range(self.steps):
             print(f'\tdefender {_step}/{self.steps} step perturb')
-            x.requires_grad = True
+            # x.requires_grad = True
+            adv_part_map.requires_grad_(True)
+            # ori_adv_part.requires_grad_(True)
+            # adv_part.requires_grad_(True)
             print(f'\tdefender start {self.sample_num} samples perturb')
             # 默认一次更新就对抗扰动一次
             for _sample in range(self.sample_num):
                 print(f'\t\tdefender{_sample}/{self.sample_num} sample perturb')
                 # 模拟微调训练方对图像进行一定变换以缓解毒性
                 # print(f'before trans x is:{x} ')
-                def_x_trans = self.transform(x).to(device, dtype=weight_dtype)
+                adv_part  = self.radius * torch.tanh(adv_part_map)
+                def_x_trans = self.transform(ori_x+adv_part).to(device, dtype=weight_dtype)
                 # 获得被进一步对抗扰动后的样本adv_x
-                adv_x = self.attacker.perturb(
-                    models, def_x_trans, self.transform(ori_x), vae, tokenizer, noise_scheduler, 
-                )
+                adv_x = def_x_trans
                 # 在额外扰动的adv_x上评估模型鲁棒性
                 loss = self.certi(models, adv_x, vae, noise_scheduler, input_ids, device, weight_dtype, target_tensor,loss_type, ori_x,tokenizer = tokenizer)
                 loss_list.append(loss.item())
@@ -428,26 +390,26 @@ class RobustPGDAttacker():
                 loss.backward()
             # 根据当前梯度信息更新x
             with torch.no_grad():
-                grad = x.grad.data
-                # print(grad)
-                # print("no same r")
-                # print(grad[0])
-                # print(grad[1])
-                if self.args.low_f_filter != -1:
-                    grad = low_pass_filter(grad.to(device='cpu',dtype = torch.float32),cutoff = self.args.low_f_filter).to(device = device,dtype=weight_dtype)
+                # vkeilo change it for cw
+                grad = adv_part_map.grad.data
+                # print(f"grad is :{grad}")
                 # print(torch.sign(grad))
                 if not self.ascending: 
                     grad.mul_(-1)
                     
                 if self.norm_type == 'l-infty':
-                    x.add_(torch.sign(grad), alpha=self.step_size)
+                    # adv_part_map.add_(grad)
+                    adv_part_map.add_(grad, alpha=self.step_size)
                 else:
                     raise NotImplementedError
-                x = self._clip_(x, ori_x, ).detach_()
-            # vkeilo add it
-            # x.grad = None
-            # torch.cuda.empty_cache()
-            # wandb.log({"Adversarial Loss": loss.item()})  
+                # x = self._clip_(x, ori_x, ).detach_()
+                adv_part_map = adv_part_map.detach_()
+            # vkeilo add it for CW  480step ~ x13430
+            # self.step_size = self.step_size
+        # final_adv_part = self.radius * torch.tanh(adv_part_map)
+
+        x = ori_x + self.radius * torch.tanh(adv_part_map)
+        x.clamp_(self.left, self.right)
         ''' reopen autograd of model after pgd '''
         for mi in [text_encoder, unet]:
             for pp in mi.parameters():
