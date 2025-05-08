@@ -61,6 +61,7 @@ if [ ! -d "$INSTANCE_DIR_CHECK" ]; then
     --wandb_run_name=$wandb_run_name \
     --wandb_project_name=$wandb_project_name \
     --attack_mode=$attack_mode \
+    --img_save_interval=$img_save_interval \
     """
     
     if [ "$train_mode" = "gau" ]; then

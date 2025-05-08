@@ -31,7 +31,7 @@ def test_one_args(args,test_lable):
     # bash run : nohup bash script/gen_and_eval_vk.sh > output_MAT-1000-200-6-6-x1x1-radius11-allSGLD-rubust0.log 2>&1
     os.environ["test_timestamp"] = str(int(time.time()))
     test_timestamp = os.getenv("test_timestamp")
-    totle_step = os.getenv('total_train_steps')
+    totle_step = os.getenv('total_gan_step')
     dataset_name = os.getenv('dataset_name')
     data_id = os.getenv('instance_name')
     classv_prompt = os.getenv('classv_prompt')
@@ -42,6 +42,8 @@ def test_one_args(args,test_lable):
         pass
     if os.getenv('total_gan_step') != "0":
         totle_step = 'totle' + os.getenv('total_gan_step')
+    else:
+        totle_step = 'default'
     if os.getenv('attack_mode') in ["pgd"]:
         os.environ["wandb_run_name"] = f"MetaCloak-{dataset_name[:-6]}-id{data_id}-step{totle_step}-{os.getenv('interval')}-x{os.getenv('defense_pgd_step_num')}x{os.getenv('attack_pgd_step_num')}s{os.getenv('defense_sample_num')}-radius{os.getenv('r')}-{os.getenv('SGLD_method')}-robust{os.getenv('attack_pgd_radius')}-{os.getenv('model_select_mode')}{('-promptmd5'+classv_prompt_md5[:8]) if classv_prompt_md5 else ''}-{os.getenv('test_timestamp')}"
     elif os.getenv('attack_mode') in ["pan","EOTpan","panrobust"]:
