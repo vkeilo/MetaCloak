@@ -28,9 +28,11 @@ if [ ! -d "$INSTANCE_DIR_CHECK" ]; then
     --advance_steps $advance_steps \
     --unroll_steps $unroll_steps \
     --total_trail_num $total_trail_num \
+    --total_gan_step $total_gan_step \
     --exp_name $gen_exp_name \
     --exp_hyper $gen_exp_hyper \
     --pretrained_model_name_or_path=$ref_model_path  \
+    --init_model_state_pool_pth_path=$init_model_state_pool_pth_path \
     --enable_xformers_memory_efficient_attention \
     --instance_data_dir_for_train=$CLEAN_TRAIN_DIR \
     --instance_data_dir_for_adversarial=$CLEAN_ADV_DIR \
@@ -56,48 +58,9 @@ if [ ! -d "$INSTANCE_DIR_CHECK" ]; then
     --attack_pgd_step_size=$step_size \
     --attack_pgd_step_num=$attack_pgd_step_num \
     --mixed_precision=$mixed_precision \
-    --sampling_times_theta=$sampling_times_theta \
-    --sampling_times_delta=$sampling_times_delta \
-    --sampling_noise_ratio=$sampling_noise_ratio  \
-    --sampling_step_delta=$sampling_step_delta  \
-    --sampling_step_theta=$sampling_step_delta  \
-    --beta_s=$beta_s \
-    --beta_p=$beta_p \
-    --mat_lambda_s=$mat_lambda_s  \
     --wandb_run_name=$wandb_run_name \
     --wandb_project_name=$wandb_project_name \
-    --SGLD_method=$SGLD_method \
     --attack_mode=$attack_mode \
-    --pan_lambda_D=$pan_lambda_D \
-    --pan_lambda_S=$pan_lambda_S \
-    --pan_omiga=$pan_omiga \
-    --pan_k=$pan_k \
-    --pan_mode=$pan_mode \
-    --init_model_state_pool_pth_path=$init_model_state_pool_pth_path \
-    --pan_use_val=$pan_use_val \
-    --model_select_mode=$model_select_mode \
-    --total_gan_step=$total_gan_step \
-    --img_save_interval=$img_save_interval \
-    --Ltype=$Ltype  \
-    --radius_d=$rd  \
-    --max_L=$((min_L+interval_L))  \
-    --min_L=$min_L  \
-    --hpara_update_interval=$hpara_update_interval \
-    --dynamic_mode=$dynamic_mode \
-    --omiga_strength=$omiga_strength \
-    --time_select=$time_select  \
-    --use_edge_filter=$use_edge_filter \
-    --use_unet_noise=$use_unet_noise \
-    --unet_noise_r=$unet_noise_r \
-    --use_text_noise=$use_text_noise \
-    --text_noise_r=$text_noise_r \
-    --loss_mode=$loss_mode \
-    --classv_prompt=\"$classv_prompt\"  \
-    --low_f_filter=$low_f_filter  \
-    --diff_time_diff_loss=$diff_time_diff_loss  \
-    --time_window_start=$time_window_start  \
-    --time_window_end=$time_window_end  \
-    --time_window_len=$time_window_len  \
     """
     
     if [ "$train_mode" = "gau" ]; then

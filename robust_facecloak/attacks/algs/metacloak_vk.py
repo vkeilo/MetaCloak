@@ -43,7 +43,7 @@ import pickle
 from robust_facecloak.attacks.worker.differential_color_functions import rgb2lab_diff, ciede2000_diff
 import torchvision.transforms as transforms
 from robust_facecloak.attacks.worker.get_v import get_identify_feature_latents
-
+import time
 
 logger = get_logger(__name__)
 
@@ -582,7 +582,7 @@ def parse_args():
     parser.add_argument(
         "--sampling_times_theta",
         type=int,
-        default=10,
+        default=1,
     )
 
     # vkeilo add it
@@ -590,7 +590,7 @@ def parse_args():
     parser.add_argument(
         "--sampling_times_delta",
         type=int,
-        default=10,
+        default=1,
     )
 
     # vkeilo add it
@@ -1234,8 +1234,8 @@ def main(args):
             Image.fromarray(
                 img_pixel.float().detach().cpu().permute(1, 2, 0).numpy().squeeze().astype(np.uint8)
             ).save(save_path)
-    print(perturbed_data)
-    save_image(perturbed_data, "load")
+    # print(perturbed_data)
+    # save_image(perturbed_data, "load")
     
     init_model_state_pool = {}
     pbar = tqdm(total=num_models, desc="initializing models")
@@ -1455,7 +1455,7 @@ def main(args):
                         # 每1000次扰动优化，保存一次扰动示例图像
                         if cnt % args.img_save_interval == 0:
                             save_image(perturbed_data, f"{cnt}")
-                            save_image(perturbed_data_D,f"{cnt}_D")
+                            # save_image(perturbed_data_D,f"{cnt}_D")
                     # frequently release the memory due to limited GPU memory, 
                     # env with more gpu might consider to remove the following lines for boosting speed
                     # 释放资源
@@ -1546,3 +1546,4 @@ if __name__ == "__main__":
     wandb.log({'status': 'gen'})
     # 核心代码
     main(args)
+

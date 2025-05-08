@@ -709,20 +709,6 @@ def main(args):
             text_encoder.gradient_checkpointing_enable()
 
 
-    # vkeilo add it
-    if args.attack_mode == "select_com":
-        init_model_state_pool_pth_path = "/data/home/yekai/github/mypro/MetaCloak/robust_facecloak/attacks/algs/tmpdata/init_model_state_pool_sd2-1.pth"
-        use_model_index = args.select_model_index
-        if use_model_index != -1:
-            split_step_dict = {0:0,1:199,2:399,3:599,4:799,5:999}
-            split_step = split_step_dict[use_model_index]
-            print(f"use model {use_model_index}")
-            with open(init_model_state_pool_pth_path, 'rb') as f:
-                model_pth_dict = pickle.load(f)
-                step2state_dict = model_pth_dict[0]
-                unet.load_state_dict(step2state_dict[split_step]["unet"])
-                text_encoder.load_state_dict(step2state_dict[split_step]["text_encoder"])
-
     # Check that all trainable models are in full precision
     low_precision_error_string = (
         "Please make sure to always have all model weights in full float32 precision when starting training - even if"
