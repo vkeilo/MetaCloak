@@ -67,7 +67,7 @@ def generate_lin_interval_list(start, end, num):
 # test_lable = "PAN_VGGFace2_r7rd7_eval0_idx50_lambdaS_1e-4_omiga0599_total120_20250401"
 # test_lable = "PAN_VGGFace2_r10rd10_eval0_idx50_lambdaS_1e-4_omiga0599_total120_20250401_x-22"
 # test_lable = "LF_test_sametime07_r11_20250411_p3"
-test_lable = "MetaCloak_SD21_VGGFace2_random50_r16"
+test_lable = "MetaCloak_SD21_VGGFace2_random50_r16_50~28"
 # test_lable = "CW_test3"
 repeat_times = 1
 params_options = {
@@ -78,7 +78,7 @@ params_options = {
         # "${MODEL_ROOT}/SD/init_model_state_pool_sd2-1.pth"
     ],
     "dataset_name": ["VGGFace2-clean"],
-    "instance_name": [i for i in range(50)],
+    "instance_name": [i for i in range(49,28,-1)],
     # "instance_name": [0,1],
     "model_select_mode":["order"],
     "wandb_project_name": ["metacloak_PAN"],
